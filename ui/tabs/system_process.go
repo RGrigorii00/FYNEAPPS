@@ -27,20 +27,6 @@ type ProcessInfo struct {
 }
 
 func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
-	// Создаем таблицу с заголовками
-	tableWithHeaders := container.NewVBox()
-
-	// Заголовки таблицы
-	headers := container.NewGridWithColumns(6,
-		widget.NewLabelWithStyle("PID", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("Имя процесса", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("CPU %", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("Память (MB)", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("Статус", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("Пользователь", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-	)
-	tableWithHeaders.Add(headers)
-
 	// Основная таблица процессов
 	processTable := widget.NewTable(
 		func() (int, int) { return 0, 6 },
@@ -52,44 +38,32 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 		},
 	)
 
-	// Настройка размеров столбцов
-	// Используйте именованные поля:
-	processTable.SetColumnWidth(0, 80)  // PID
-	processTable.SetColumnWidth(1, 250) // Имя
+	// Настройка размеров столбцов (автоматическое растягивание)
+	processTable.SetColumnWidth(0, 100) // PID
+	processTable.SetColumnWidth(1, 300) // Имя
 	processTable.SetColumnWidth(2, 100) // CPU
-	processTable.SetColumnWidth(3, 120) // Память
-	processTable.SetColumnWidth(4, 100) // Статус
-	processTable.SetColumnWidth(5, 200) // Увеличена ширина для пользователя
+	processTable.SetColumnWidth(3, 150) // Память
+	processTable.SetColumnWidth(4, 150) // Статус
+	processTable.SetColumnWidth(5, 200) // Пользователь
 
-	tableWithHeaders.Add(container.NewStack(processTable))
-
-	// Создаем контейнер с прокруткой
-	log.Println("Создание контейнера с прокруткой...")
-	scrollContainer := container.NewScroll(tableWithHeaders)
-	log.Printf("Контейнер с прокруткой создан: %v", scrollContainer)
-
-	// Устанавливаем минимальный размер
-	minSize := fyne.NewSize(1000, 600)
-	log.Printf("Установка минимального размера: %v", minSize)
-	scrollContainer.SetMinSize(minSize)
-	log.Println("Минимальный размер установлен")
-
-	// Устанавливаем размер контейнера
-	newSize := fyne.NewSize(1000, 1000)
-	log.Printf("Установка размера контейнера: %v", newSize)
-	scrollContainer.Resize(newSize)
-	log.Println("Размер контейнера установлен")
-
-	// Можно добавить проверку текущих размеров для отладки
-	currentSize := scrollContainer.Size()
-	log.Printf("Текущий размер контейнера: width=%.2f, height=%.2f", currentSize.Width, currentSize.Height)
+	// Создаем контейнер с заголовками и таблицей
+	tableContainer := container.NewBorder(
+		// Заголовки таблицы
+		container.NewGridWithColumns(6,
+			widget.NewLabelWithStyle("PID", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabelWithStyle("Имя процесса", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			widget.NewLabelWithStyle("CPU %", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+			widget.NewLabelWithStyle("Память (MB)", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+			widget.NewLabelWithStyle("Статус", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+			widget.NewLabelWithStyle("Пользователь", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		),
+		nil, nil, nil,
+		container.NewScroll(processTable),
+	)
 
 	// Элементы управления
 	searchEntry := widget.NewEntry()
 	searchEntry.SetPlaceHolder("Поиск по имени, PID или пользователю...")
-	searchEntry.MinSize()
-	searchEntry.Resize(fyne.NewSize(500, searchEntry.MinSize().Height)) // Увеличена ширина поля поиска
-
 	refreshBtn := widget.NewButtonWithIcon("Обновить", theme.ViewRefreshIcon(), nil)
 	sortSelect := widget.NewSelect([]string{"CPU", "Память", "PID", "Имя"}, nil)
 	sortSelect.SetSelected("CPU")
@@ -108,7 +82,6 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 		filtered := filterProcesses(processes, searchEntry.Text)
 		sortProcesses(filtered, sortSelect.Selected)
 
-		// Обновление в главном потоке
 		fyne.Do(func() {
 			processTable.Length = func() (int, int) {
 				return len(filtered), 6
@@ -131,28 +104,18 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 				case 3:
 					label.SetText(fmt.Sprintf("%.1f", proc.Memory))
 				case 4:
-					// Обработка пустого статуса
-					if proc.Status == "" {
-						label.SetText("-")
-					} else {
-						label.SetText(proc.Status)
-					}
+					label.SetText(proc.Status)
 				case 5:
-					// Обрезаем длинные имена пользователей
-					if len(proc.User) > 20 {
-						label.SetText(proc.User[:20] + "...")
-					} else {
-						label.SetText(proc.User)
-					}
+					label.SetText(proc.User) // Убрано сокращение пользователя
 				}
 			}
 			processTable.Refresh()
 		})
 	}
 
-	// Оптимизированное автообновление
+	// Автообновление
 	go func() {
-		ticker := time.NewTicker(3 * time.Second)
+		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
 		for {
@@ -170,7 +133,7 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 	refreshBtn.OnTapped = func() { go updateProcesses() }
 	sortSelect.OnChanged = func(s string) { go updateProcesses() }
 
-	// Первоначальное обновление в фоне
+	// Первоначальное обновление
 	go updateProcesses()
 
 	// Очистка при закрытии
@@ -178,27 +141,35 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 		close(stopChan)
 	})
 
-	// Компоновка интерфейса
-	searchContainer := container.NewVBox(
-		container.NewBorder(nil, nil, nil, nil, searchEntry),
+	// Компоновка элементов управления
+	controls := container.NewHBox(
+		container.NewVBox(
+			container.NewHBox(
+				widget.NewLabel("Поиск:"),
+				searchEntry,
+			),
+		),
 		layout.NewSpacer(),
-		widget.NewLabel("Сортировка:"),
-		sortSelect,
-		refreshBtn,
+		container.NewHBox(
+			widget.NewLabel("Сортировка:"),
+			sortSelect,
+			refreshBtn,
+		),
 	)
 
-	// Главный контейнер с растягиванием
+	// Главный контейнер с растягиванием на весь экран
 	mainContent := container.NewBorder(
-		searchContainer,
+		controls,
 		nil,
 		nil,
 		nil,
-		scrollContainer,
+		container.NewMax(tableContainer), // Используем Max для растягивания
 	)
 
 	return mainContent
 }
 
+// Остальные функции без изменений
 func getSystemProcesses() ([]ProcessInfo, error) {
 	processes, err := process.Processes()
 	if err != nil {
@@ -210,16 +181,16 @@ func getSystemProcesses() ([]ProcessInfo, error) {
 		name, _ := p.Name()
 		cpu, _ := p.CPUPercent()
 		mem, _ := p.MemoryPercent()
-		status, _ := p.Status() // Теперь это string, а не []string
+		status, _ := p.Status()
 		user, _ := p.Username()
 		cmd, _ := p.Cmdline()
 
 		result = append(result, ProcessInfo{
 			PID:     p.Pid,
 			Name:    name,
-			CPU:     cpu,
+			CPU:     cpu / 10,
 			Memory:  float32(mem),
-			Status:  status, // Просто используем string напрямую
+			Status:  status,
 			User:    user,
 			Command: cmd,
 		})

@@ -26,6 +26,9 @@ func main() {
 	window := myApp.NewWindow("ПГАТУ Инфраструктура")
 	window.Resize(fyne.NewSize(800, 600))
 
+	// Инициализация менеджера настроек
+	// settingsManager := settings.NewSettingsManager(myApp, window)
+
 	// Проверяем, поддерживается ли системный трей
 	if desk, ok := myApp.(desktop.App); ok {
 		// Создаем меню для трея
@@ -63,7 +66,7 @@ func main() {
 	}
 
 	// Создаем все вкладки
-	tabs := tabs.CreateAppTabs(window)
+	tabs := tabs.CreateAppTabs(myApp, window)
 
 	// Устанавливаем вкладки как содержимое окна
 	window.SetContent(tabs)

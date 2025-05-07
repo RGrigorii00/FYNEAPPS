@@ -29,12 +29,20 @@ type GitHubRelease struct {
 	} `json:"assets"`
 }
 
-func CreateAppTabs(window fyne.Window) fyne.CanvasObject {
+// Создаем переменные для хранения элементов, которые нужно обновлять
+var (
+	cpuBtn, appslibraryBtn, processBtn     *widget.Button
+	serverstatusBtn, portalBtn, siteBtn    *widget.Button
+	updateBtn, repositoriiBtn, settingsBtn *widget.Button
+)
+
+func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	// Создаем кнопки с иконками для вертикального меню
-	cpuBtn := widget.NewButtonWithIcon("Мой компьютер", theme.ComputerIcon(), nil)
+
+	cpuBtn := widget.NewButtonWithIcon(tabs.GetLocalizedString("MyComputer"), theme.ComputerIcon(), nil)
 	appslibraryBtn := widget.NewButtonWithIcon("Библиотека приложений", theme.SearchIcon(), nil)
-	processBtn := widget.NewButtonWithIcon("Процессы компьютера", theme.DocumentIcon(), nil)
-	serverstatusBtn := widget.NewButtonWithIcon("Статус серверов ПГАТУ", theme.SettingsIcon(), nil)
+	processBtn := widget.NewButtonWithIcon("Процессы компьютера", theme.ListIcon(), nil)
+	serverstatusBtn := widget.NewButtonWithIcon("Статус серверов ПГАТУ", theme.StorageIcon(), nil)
 	// // Создаем изображение из ресурса
 	// img := canvas.NewImageFromResource(resources.PortalIcon)
 	// img.FillMode = canvas.ImageFillContain
@@ -47,8 +55,11 @@ func CreateAppTabs(window fyne.Window) fyne.CanvasObject {
 	portalBtn.OnTapped = func() {
 		openBrowser("https://portal.pgatu.ru/")
 	}
-	siteBtn := widget.NewButtonWithIcon("Портал ПГАТУ", theme.SettingsIcon(), func() {
+	siteBtn := widget.NewButtonWithIcon("Сайт ПГАТУ", theme.SettingsIcon(), func() {
 		openBrowser("https://pgsha.ru/today/")
+	})
+	repositoriiBtn := widget.NewButtonWithIcon("Последние обновления", theme.SettingsIcon(), func() {
+		openBrowser("https://github.com/RGrigorii00/FYNEAPPS/releases")
 	})
 
 	// Добавляем новую кнопку обновления
@@ -56,12 +67,33 @@ func CreateAppTabs(window fyne.Window) fyne.CanvasObject {
 		updateApp(window)
 	})
 
+	// Добавляем новую кнопку обновления
+	settingsBtn := widget.NewButtonWithIcon("Настройки приложения", theme.SettingsIcon(), func() {
+		updateApp(window)
+	})
+
 	// Настраиваем стиль кнопок
-	buttons := []*widget.Button{cpuBtn, appslibraryBtn, processBtn, portalBtn, siteBtn, updateBtn}
+	buttons := []*widget.Button{cpuBtn, appslibraryBtn, processBtn, serverstatusBtn, portalBtn, siteBtn, updateBtn, repositoriiBtn, settingsBtn}
 	for _, btn := range buttons {
 		btn.Alignment = widget.ButtonAlignLeading
 		btn.Importance = widget.MediumImportance
 	}
+
+	// Функция для обновления текстов
+	updateUI := func() {
+		cpuBtn.SetText(tabs.GetLocalizedString("MyComputer"))
+		appslibraryBtn.SetText(tabs.GetLocalizedString("AppsLibrary"))
+		processBtn.SetText(tabs.GetLocalizedString("Processes"))
+		serverstatusBtn.SetText(tabs.GetLocalizedString("ServerStatus"))
+		portalBtn.SetText(tabs.GetLocalizedString("Portal"))
+		siteBtn.SetText(tabs.GetLocalizedString("Site"))
+		updateBtn.SetText(tabs.GetLocalizedString("Update"))
+		repositoriiBtn.SetText(tabs.GetLocalizedString("Repository"))
+		settingsBtn.SetText(tabs.GetLocalizedString("Settings"))
+	}
+
+	// Подписываемся на изменения языка
+	tabs.OnLanguageChange(updateUI)
 
 	// Загрузка изображения
 	img, err := fyne.LoadResourceFromPath("images/main_screen/pgatu_logo_small.png")
@@ -95,7 +127,12 @@ func CreateAppTabs(window fyne.Window) fyne.CanvasObject {
 			portalBtn,
 			siteBtn,
 			updateBtn,
+			repositoriiBtn,
+			settingsBtn,
 			widget.NewSeparator(),
+			container.NewCenter( // Обертка для центрирования текста
+				widget.NewLabel("v0.0.1 alpha"),
+			),
 		),
 	)
 
@@ -125,6 +162,7 @@ func CreateAppTabs(window fyne.Window) fyne.CanvasObject {
 	appslibraryBtn.OnTapped = func() { setTab(tabs.CreateAppsLibraryTab(window), appslibraryBtn) }
 	processBtn.OnTapped = func() { setTab(tabs.CreateProcessesTab(window), processBtn) }
 	serverstatusBtn.OnTapped = func() { setTab(tabs.CreateServerStatusTab(window), serverstatusBtn) }
+	settingsBtn.OnTapped = func() { setTab(tabs.CreateSettingsTab(window, myApp), serverstatusBtn) }
 
 	// Устанавливаем активную кнопку по умолчанию
 	setActiveButton(cpuBtn)
