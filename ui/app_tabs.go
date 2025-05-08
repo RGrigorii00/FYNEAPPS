@@ -131,7 +131,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 			settingsBtn,
 			widget.NewSeparator(),
 			container.NewCenter( // Обертка для центрирования текста
-				widget.NewLabel("v0.0.1 alpha"),
+				widget.NewLabel("v0.0.3 alpha"),
 			),
 		),
 	)

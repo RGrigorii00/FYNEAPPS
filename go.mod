@@ -4,6 +4,8 @@ go 1.23.4
 
 require (
 	fyne.io/fyne/v2 v2.6.0
+	github.com/google/uuid v1.6.0
+	github.com/lib/pq v1.10.9
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.24.5
 )
