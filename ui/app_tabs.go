@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"FYNEAPPS/database"
 	"FYNEAPPS/ui/tabs"
 	"encoding/json"
 	"fmt"
@@ -131,7 +132,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 			settingsBtn,
 			widget.NewSeparator(),
 			container.NewCenter( // Обертка для центрирования текста
-				widget.NewLabel("v0.0.3 alpha"),
+				widget.NewLabel("v0.0.4 alpha"),
 			),
 		),
 	)
@@ -158,8 +159,27 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 		content.Refresh()
 	}
 
+	// Создаем подключение к базе данных
+	db := database.New()
+	opts := database.ConnectionOptions{
+		Host:     "83.166.245.249",
+		Port:     "5432",
+		User:     "user",
+		Password: "user",
+		DBName:   "grafana_db",
+		SSLMode:  "default",
+	}
+
+	// Устанавливаем соединение
+	db.Connect(opts)
+	if err != nil {
+		// Обработка ошибки подключения
+		panic(err)
+	}
+	defer db.Disconnect() // Закрываем соединение при выходе
+
 	cpuBtn.OnTapped = func() { setTab(tabs.CreateHardwareTab(window), cpuBtn) }
-	appslibraryBtn.OnTapped = func() { setTab(tabs.CreateAppsLibraryTab(window), appslibraryBtn) }
+	appslibraryBtn.OnTapped = func() { setTab(tabs.CreateAppsLibraryTab(window, db), appslibraryBtn) }
 	processBtn.OnTapped = func() { setTab(tabs.CreateProcessesTab(window), processBtn) }
 	serverstatusBtn.OnTapped = func() { setTab(tabs.CreateServerStatusTab(window), serverstatusBtn) }
 	settingsBtn.OnTapped = func() { setTab(tabs.CreateSettingsTab(window, myApp), serverstatusBtn) }
