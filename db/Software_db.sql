@@ -65,3 +65,20 @@ VALUES
 
 ALTER TABLE software 
 ADD COLUMN download_url VARCHAR(1024);
+
+SELECT 
+    name AS "Название ПО",
+    publisher AS "Производитель",
+    COUNT(*) AS "Количество установок",
+    ROUND(AVG(size_mb), 2) AS "Средний размер (MB)",
+    MAX(version) AS "Последняя версия",
+    COUNT(DISTINCT architecture) AS "Поддерживаемые архитектуры"
+FROM 
+    software
+WHERE 
+    is_system_component = FALSE 
+    AND is_update = FALSE
+GROUP BY 
+    name, publisher
+ORDER BY 
+    COUNT(*) DESC

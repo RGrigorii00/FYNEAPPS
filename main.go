@@ -1,21 +1,22 @@
 package main
 
 import (
-	tabs "FYNEAPPS/ui"
+	"FYNEAPPS/resources"
+	"FYNEAPPS/ui"
+	setting "FYNEAPPS/ui/setting_tab"
 	"database/sql"
 	"fmt"
 	"log"
-	"runtime"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/driver/desktop"
-	_ "github.com/lib/pq" // PostgreSQL драйвер
+	_ "github.com/lib/pq"
 )
 
 var (
-	iconData []byte
-	db       *sql.DB
+	db *sql.DB
 )
 
 const (
@@ -36,7 +37,6 @@ func initDB() error {
 		return fmt.Errorf("ошибка подключения к БД: %v", err)
 	}
 
-	// Проверяем соединение
 	err = db.Ping()
 	if err != nil {
 		return fmt.Errorf("ошибка проверки соединения: %v", err)
@@ -48,58 +48,59 @@ func initDB() error {
 
 func main() {
 	// Инициализация базы данных
-	err := initDB()
-	if err != nil {
+	if err := initDB(); err != nil {
 		log.Printf("Ошибка инициализации БД: %v", err)
-		// Приложение может продолжить работу, но без функционала БД
 	} else {
-		defer db.Close()
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Printf("Ошибка закрытия соединения с БД: %v", err)
+			}
+		}()
 	}
 
-	// Создаём новое приложение
-	myApp := app.New()
+	// Создание приложения
+	myApp := app.NewWithID("ru.pgatu.infrastructure")
+	iconResource := resources.ResourcePgatulogosmallPng
 
-	// Создаем ресурс из встроенных данных
-	iconResource := fyne.NewStaticResource("images/icons/pgatu_logo_small.png", iconData)
-
-	// Устанавливаем иконку для приложения
+	// Настройки приложения
 	myApp.SetIcon(iconResource)
-
-	// Создаём главное окно
 	window := myApp.NewWindow("ПГАТУ Инфраструктура")
-	window.Resize(fyne.NewSize(800, 600))
 
-	// Проверяем поддержку системного трея
-	if desk, ok := myApp.(desktop.App); ok && runtime.GOOS == "windows" {
-		// Создаем меню для трея
+	// Загрузка настроек
+	appSettings := setting.LoadSettings(myApp, window)
+	window.Resize(fyne.NewSize(float32(appSettings.Width), float32(appSettings.Height)))
+
+	// Настройка системного трея
+	if desk, ok := myApp.(desktop.App); ok {
 		m := fyne.NewMenu("ПГАТУ Инфраструктура",
-			fyne.NewMenuItem("Развернуть", func() {
-				window.Show()
-			}),
-			fyne.NewMenuItem("123", func() {
-				window.Show()
-			}),
-			fyne.NewMenuItem("Выход", func() {
-				myApp.Quit()
-			}),
+			fyne.NewMenuItem("Развернуть", window.Show),
+			fyne.NewMenuItemSeparator(),
+			fyne.NewMenuItem("Выход", myApp.Quit),
 		)
-
 		desk.SetSystemTrayMenu(m)
 		desk.SetSystemTrayIcon(iconResource)
 	}
 
-	// Обработка сворачивания в трей
+	// Обработка закрытия окна
 	window.SetCloseIntercept(func() {
 		window.Hide()
 	})
 
-	// Устанавливаем иконку для окна
-	window.SetIcon(iconResource)
-
-	// Передаем соединение с БД в создание вкладок
-	appTabs := tabs.CreateAppTabs(myApp, window)
+	// Создание интерфейса
+	appTabs := ui.CreateAppTabs(myApp, window)
 	window.SetContent(appTabs)
 
-	// Запускаем приложение
+	// Фоновая задача (пример)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			log.Println("Выполнение фоновой задачи...")
+			myApp.SendNotification(fyne.NewNotification("ПГАТУ", "Приложение работает в фоне"))
+		}
+	}()
+
+	// Запуск приложения
 	window.ShowAndRun()
 }

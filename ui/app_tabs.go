@@ -2,11 +2,12 @@ package ui
 
 import (
 	"FYNEAPPS/database"
+	"FYNEAPPS/resources"
+	settings "FYNEAPPS/ui/setting_tab"
 	"FYNEAPPS/ui/tabs"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -40,10 +41,11 @@ var (
 func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	// Создаем кнопки с иконками для вертикального меню
 
-	cpuBtn := widget.NewButtonWithIcon(tabs.GetLocalizedString("MyComputer"), theme.ComputerIcon(), nil)
+	cpuBtn := widget.NewButtonWithIcon(settings.GetLocalizedString("MyComputer"), theme.ComputerIcon(), nil)
 	appslibraryBtn := widget.NewButtonWithIcon("Библиотека приложений", theme.SearchIcon(), nil)
 	processBtn := widget.NewButtonWithIcon("Процессы компьютера", theme.ListIcon(), nil)
 	serverstatusBtn := widget.NewButtonWithIcon("Статус серверов ПГАТУ", theme.StorageIcon(), nil)
+	compterprogramsBtn := widget.NewButtonWithIcon("Программы на компьютере", theme.StorageIcon(), nil)
 	// // Создаем изображение из ресурса
 	// img := canvas.NewImageFromResource(resources.PortalIcon)
 	// img.FillMode = canvas.ImageFillContain
@@ -74,7 +76,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	})
 
 	// Настраиваем стиль кнопок
-	buttons := []*widget.Button{cpuBtn, appslibraryBtn, processBtn, serverstatusBtn, portalBtn, siteBtn, updateBtn, repositoriiBtn, settingsBtn}
+	buttons := []*widget.Button{cpuBtn, appslibraryBtn, processBtn, serverstatusBtn, compterprogramsBtn, portalBtn, siteBtn, updateBtn, repositoriiBtn, settingsBtn}
 	for _, btn := range buttons {
 		btn.Alignment = widget.ButtonAlignLeading
 		btn.Importance = widget.MediumImportance
@@ -82,26 +84,26 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 	// Функция для обновления текстов
 	updateUI := func() {
-		cpuBtn.SetText(tabs.GetLocalizedString("MyComputer"))
-		appslibraryBtn.SetText(tabs.GetLocalizedString("AppsLibrary"))
-		processBtn.SetText(tabs.GetLocalizedString("Processes"))
-		serverstatusBtn.SetText(tabs.GetLocalizedString("ServerStatus"))
-		portalBtn.SetText(tabs.GetLocalizedString("Portal"))
-		siteBtn.SetText(tabs.GetLocalizedString("Site"))
-		updateBtn.SetText(tabs.GetLocalizedString("Update"))
-		repositoriiBtn.SetText(tabs.GetLocalizedString("Repository"))
-		settingsBtn.SetText(tabs.GetLocalizedString("Settings"))
+		cpuBtn.SetText(settings.GetLocalizedString("MyComputer"))
+		appslibraryBtn.SetText(settings.GetLocalizedString("AppsLibrary"))
+		processBtn.SetText(settings.GetLocalizedString("Processes"))
+		serverstatusBtn.SetText(settings.GetLocalizedString("ServerStatus"))
+		portalBtn.SetText(settings.GetLocalizedString("Portal"))
+		siteBtn.SetText(settings.GetLocalizedString("Site"))
+		updateBtn.SetText(settings.GetLocalizedString("Update"))
+		repositoriiBtn.SetText(settings.GetLocalizedString("Repository"))
+		settingsBtn.SetText(settings.GetLocalizedString("Settings"))
 	}
 
 	// Подписываемся на изменения языка
-	tabs.OnLanguageChange(updateUI)
+	settings.OnLanguageChange(updateUI)
 
 	// Загрузка изображения
-	img, err := fyne.LoadResourceFromPath("images/main_screen/pgatu_logo_small.png")
-	if err != nil {
-		log.Println("Error loading image:", err)
-		img = nil
-	}
+	img := resources.ResourcePgatulogosmallPng // fyne.LoadResourceFromPath("images/main_screen/pgatu_logo_small.png")
+	// if err != nil {
+	// 	log.Println("Error loading image:", err)
+	// 	img = nil
+	// }
 
 	// Создаем изображение с возможностью управления размером
 	image := canvas.NewImageFromResource(img)
@@ -125,6 +127,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 			appslibraryBtn,
 			processBtn,
 			serverstatusBtn,
+			compterprogramsBtn,
 			portalBtn,
 			siteBtn,
 			updateBtn,
@@ -132,7 +135,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 			settingsBtn,
 			widget.NewSeparator(),
 			container.NewCenter( // Обертка для центрирования текста
-				widget.NewLabel("v0.0.4 alpha"),
+				widget.NewLabel("v0.0.5 alpha"),
 			),
 		),
 	)
@@ -172,17 +175,18 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 	// Устанавливаем соединение
 	db.Connect(opts)
-	if err != nil {
-		// Обработка ошибки подключения
-		panic(err)
-	}
+	// if err != nil {
+	// 	// Обработка ошибки подключения
+	// 	panic(err)
+	// }
 	defer db.Disconnect() // Закрываем соединение при выходе
 
 	cpuBtn.OnTapped = func() { setTab(tabs.CreateHardwareTab(window), cpuBtn) }
 	appslibraryBtn.OnTapped = func() { setTab(tabs.CreateAppsLibraryTab(window, db), appslibraryBtn) }
 	processBtn.OnTapped = func() { setTab(tabs.CreateProcessesTab(window), processBtn) }
 	serverstatusBtn.OnTapped = func() { setTab(tabs.CreateServerStatusTab(window), serverstatusBtn) }
-	settingsBtn.OnTapped = func() { setTab(tabs.CreateSettingsTab(window, myApp), serverstatusBtn) }
+	compterprogramsBtn.OnTapped = func() { setTab(tabs.CreateSoftwareTab(window), serverstatusBtn) }
+	settingsBtn.OnTapped = func() { setTab(settings.CreateSettingsTab(window, myApp), serverstatusBtn) }
 
 	// Устанавливаем активную кнопку по умолчанию
 	setActiveButton(cpuBtn)
@@ -223,7 +227,7 @@ func updateApp(window fyne.Window) {
 		defer dialog.Hide()
 
 		// 1. Проверка текущей версии (замените на свою логику)
-		currentVersion := "0.0.1" // Это должно быть из вашего приложения
+		currentVersion := "0.0.5" // Это должно быть из вашего приложения
 
 		// 2. Получение информации о последнем релизе
 		statusLabel.SetText("Получение информации о релизе...")

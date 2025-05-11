@@ -2,6 +2,7 @@ package tabs
 
 import (
 	"FYNEAPPS/database"
+	"FYNEAPPS/resources"
 	"database/sql"
 	"fmt"
 	"image"
@@ -148,17 +149,20 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 }
 
 func createAppCard(sw Software) (*fyne.Container, *widget.Button, *widget.ProgressBar, error) {
-	// Загрузка иконки
-	icon, err := loadAppIcon("images/main_screen/pgatu_logo_small.png")
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("не удалось загрузить иконку: %v", err)
-	}
+	// Используем встроенный ресурс вместо загрузки из файла
+	iconRes := resources.ResourcePgatulogosmallPng // Автоматически сгенерированное имя
+
+	// Создаем изображение из ресурса
+	icon := canvas.NewImageFromResource(iconRes)
 	icon.FillMode = canvas.ImageFillContain
 	icon.SetMinSize(fyne.NewSize(128, 128))
 
-	// Создаем элементы UI
+	// Остальной код остается без изменений...
 	progress := widget.NewProgressBar()
 	progress.Hide()
+
+	speedLabel := widget.NewLabel("")
+	speedLabel.Hide()
 
 	downloadBtn := widget.NewButtonWithIcon("Скачать", theme.DownloadIcon(), nil)
 	downloadBtn.OnTapped = func() {
@@ -170,13 +174,16 @@ func createAppCard(sw Software) (*fyne.Container, *widget.Button, *widget.Progre
 		fyne.Do(func() {
 			downloadBtn.Disable()
 			progress.Show()
+			speedLabel.Show()
 			progress.SetValue(0)
+			speedLabel.SetText("Подготовка...")
 		})
 
 		go func() {
-			filePath, err := downloadFile(sw.Name, sw.DownloadURL, func(p float64) {
+			filePath, err := downloadFile(sw.Name, sw.DownloadURL, func(p float64, speed string) {
 				fyne.Do(func() {
 					progress.SetValue(p)
+					speedLabel.SetText(fmt.Sprintf("Скорость: %s", speed))
 				})
 			})
 
@@ -185,51 +192,62 @@ func createAppCard(sw Software) (*fyne.Container, *widget.Button, *widget.Progre
 				if err != nil {
 					showInfoDialog("Ошибка", fmt.Sprintf("Ошибка скачивания: %v", err))
 					progress.Hide()
+					speedLabel.Hide()
 					return
 				}
 
 				progress.SetValue(1.0)
+				speedLabel.SetText("Завершено")
 				showInfoDialog("Успешно", fmt.Sprintf("Файл сохранен в: %s", filePath))
 				time.AfterFunc(2*time.Second, func() {
 					fyne.Do(func() {
 						progress.Hide()
+						speedLabel.Hide()
 					})
 				})
 			})
 		}()
 	}
 
-	// Создаем карточку (остаётся без изменений)
+	// Создаем карточку с рамкой и центрированным содержимым
+	cardContent := container.NewVBox(
+		container.NewCenter(icon),
+		container.NewCenter(widget.NewLabel(sw.Name)),
+		container.NewCenter(widget.NewLabel(fmt.Sprintf("Версия: %s", sw.Version))),
+		container.NewCenter(widget.NewLabel(fmt.Sprintf("Производитель: %s", sw.Publisher))),
+		container.NewCenter(widget.NewLabel(fmt.Sprintf("Размер: %.2f MB", sw.SizeMB))),
+		container.NewCenter(widget.NewLabel(fmt.Sprintf("Архитектура: %s", sw.Architecture))),
+		layout.NewSpacer(),
+		container.NewVBox(
+			container.NewHBox(
+				layout.NewSpacer(),
+				downloadBtn,
+				widget.NewButtonWithIcon("Обновить", theme.ViewRefreshIcon(), func() {
+					checkForUpdates(sw.ID)
+				}),
+				widget.NewButtonWithIcon("Запуск", theme.MediaPlayIcon(), func() {
+					showSoftwareInfo(sw)
+				}),
+				layout.NewSpacer(),
+			),
+			container.NewPadded( // Контейнер с отступами для прогресс-бара
+				progress, // Теперь будет занимать всю доступную ширину
+			),
+			container.NewCenter(speedLabel),
+		),
+	)
+
+	// Создаем скругленную рамку вокруг карточки
+	border := canvas.NewRectangle(color.NRGBA{R: 255, G: 255, B: 255, A: 0}) // Прозрачная заливка
+	border.StrokeColor = color.NRGBA{R: 150, G: 150, B: 150, A: 200}         // Цвет рамки (серый)
+	border.StrokeWidth = 0.5                                                 // Тонкая линия
+	border.CornerRadius = 10                                                 // Радиус скругления углов (в пикселях)
+
 	card := container.NewPadded(
 		container.NewStack(
-			container.NewPadded(canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 30})),
-			container.NewStack(
-				canvas.NewRectangle(theme.Color(theme.ColorNameBackground)),
-				container.NewPadded(
-					container.NewVBox(
-						container.NewCenter(icon),
-						container.NewCenter(widget.NewLabel(sw.Name)),
-						container.NewPadded(widget.NewLabel(fmt.Sprintf("Производитель: %s", sw.Publisher))),
-						container.NewCenter(widget.NewLabel(fmt.Sprintf("Версия: %s", sw.Version))),
-						container.NewCenter(widget.NewLabel(fmt.Sprintf("Размер: %.2f MB", sw.SizeMB))),
-						container.NewCenter(widget.NewLabel(fmt.Sprintf("Архитектура: %s", sw.Architecture))),
-						layout.NewSpacer(),
-						container.NewVBox(
-							container.NewHBox(
-								layout.NewSpacer(),
-								downloadBtn,
-								widget.NewButtonWithIcon("Обновить", theme.ViewRefreshIcon(), func() {
-									checkForUpdates(sw.ID)
-								}),
-								widget.NewButtonWithIcon("Запуск", theme.MediaPlayIcon(), func() {
-									showSoftwareInfo(sw)
-								}),
-								layout.NewSpacer(),
-							),
-							progress,
-						),
-					),
-				),
+			border,
+			container.NewPadded(
+				cardContent,
 			),
 		),
 	)
@@ -249,7 +267,7 @@ func loadLatestSoftwareVersions() ([]Software, error) {
 			FROM software
 			GROUP BY name
 		) latest ON s.name = latest.name AND s.timestamp = latest.latest_timestamp
-		WHERE s.is_system_component = FALSE
+		--WHERE s.is_system_component = FALSE
 		ORDER BY s.name
 	`
 
@@ -279,14 +297,12 @@ func loadLatestSoftwareVersions() ([]Software, error) {
 	return softwareList, nil
 }
 
-func downloadFile(filename, url string, updateProgress func(float64)) (string, error) {
-	// Создаем HTTP запрос
+func downloadFile(filename, url string, updateProgress func(float64, string)) (string, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", fmt.Errorf("ошибка создания запроса: %v", err)
 	}
 
-	// Выполняем запрос
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("ошибка соединения: %v", err)
@@ -297,12 +313,10 @@ func downloadFile(filename, url string, updateProgress func(float64)) (string, e
 		return "", fmt.Errorf("сервер вернул ошибку: %s", resp.Status)
 	}
 
-	// Создаем папку для загрузок если не существует
 	if err := os.MkdirAll(downloadsDir, 0755); err != nil {
 		return "", fmt.Errorf("не удалось создать папку: %v", err)
 	}
 
-	// Создаем файл для сохранения
 	filePath := filepath.Join(downloadsDir, filename)
 	out, err := os.Create(filePath)
 	if err != nil {
@@ -310,7 +324,6 @@ func downloadFile(filename, url string, updateProgress func(float64)) (string, e
 	}
 	defer out.Close()
 
-	// Копируем данные с прогрессом
 	counter := &writeCounter{
 		total:   resp.ContentLength,
 		update:  updateProgress,
@@ -318,30 +331,63 @@ func downloadFile(filename, url string, updateProgress func(float64)) (string, e
 	}
 
 	if _, err = io.Copy(out, io.TeeReader(resp.Body, counter)); err != nil {
-		os.Remove(filePath) // Удаляем частично скачанный файл
+		os.Remove(filePath)
 		return "", fmt.Errorf("ошибка скачивания: %v", err)
 	}
 
 	return filePath, nil
 }
 
-// Вспомогательная структура для отслеживания прогресса
 type writeCounter struct {
-	total   int64
-	update  func(float64)
-	written int64
+	total       int64
+	update      func(float64, string)
+	written     int64
+	startTime   time.Time
+	lastWritten int64
+	lastTime    time.Time
 }
 
 func (wc *writeCounter) Write(p []byte) (int, error) {
 	n := len(p)
 	wc.written += int64(n)
+	now := time.Now()
 
-	if wc.total > 0 {
+	if wc.startTime.IsZero() {
+		wc.startTime = now
+		wc.lastTime = now
+		wc.lastWritten = 0
+	}
+
+	if now.Sub(wc.lastTime) >= 500*time.Millisecond {
+		elapsed := now.Sub(wc.lastTime).Seconds()
+		bytesSinceLast := wc.written - wc.lastWritten
+		speed := float64(bytesSinceLast) / elapsed
+
+		speedStr := formatSpeed(speed)
 		progress := float64(wc.written) / float64(wc.total)
-		wc.update(progress)
+		wc.update(progress, speedStr)
+
+		wc.lastTime = now
+		wc.lastWritten = wc.written
 	}
 
 	return n, nil
+}
+
+func formatSpeed(bytesPerSec float64) string {
+	const (
+		KB = 1 << 10
+		MB = 1 << 20
+	)
+
+	switch {
+	case bytesPerSec >= MB:
+		return fmt.Sprintf("%.1f MB/s", bytesPerSec/MB)
+	case bytesPerSec >= KB:
+		return fmt.Sprintf("%.1f KB/s", bytesPerSec/KB)
+	default:
+		return fmt.Sprintf("%.0f B/s", bytesPerSec)
+	}
 }
 
 func showSoftwareInfo(sw Software) {
