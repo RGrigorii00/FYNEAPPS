@@ -2,36 +2,40 @@ package tabs
 
 import (
 	"context"
-	"math/rand"
+	"fmt"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
 // ServerStatus представляет статус сервера
 type ServerStatus struct {
 	Name   string
-	Host   string // Изменено с URL на Host для ping
+	Host   string
 	Status string
-	Load   int
+	Ping   string
 }
 
 func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
-	title := widget.NewLabel("Server Monitoring")
-	title.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
+	title := canvas.NewText("Доступность серверов ПГАТУ", theme.Color(theme.ColorNameForeground))
+	title.TextSize = 24
 	title.Alignment = fyne.TextAlignCenter
+	title.TextStyle = fyne.TextStyle{Bold: true}
 
 	// Инициализация данных серверов
 	servers := []ServerStatus{
-		{"Main API", "91.203.238.2", "Checking...", 0},
-		{"Database", "91.203.238.4", "Checking...", 0},
-		{"Cache", "83.166.245.249", "Checking...", 0},
+		{"Сайт ПГАТУ", "91.203.238.2", "Checking...", "N/A"},
+		{"Корпоративный Портал ПГАТУ", "91.203.238.4", "Checking...", "N/A"},
+		{"Мой хост", "83.166.245.249", "Checking...", "N/A"},
 	}
 
 	// Создаем привязки данных
@@ -40,7 +44,7 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		data[i] = binding.BindStruct(&servers[i])
 	}
 
-	// Создаем таблицу
+	// Создаем таблицу с улучшенным стилем
 	table := widget.NewTable(
 		func() (int, int) {
 			return len(data), 4
@@ -50,45 +54,50 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		},
 		func(id widget.TableCellID, obj fyne.CanvasObject) {
 			label := obj.(*widget.Label)
+			label.Wrapping = fyne.TextTruncate
 			item := data[id.Row]
 
 			switch id.Col {
 			case 0:
 				name, _ := item.GetItem("Name")
 				label.Bind(name.(binding.String))
+				label.Alignment = fyne.TextAlignLeading
 			case 1:
 				host, _ := item.GetItem("Host")
 				label.Bind(host.(binding.String))
+				label.Alignment = fyne.TextAlignLeading
 			case 2:
 				status, _ := item.GetItem("Status")
 				label.Bind(status.(binding.String))
+				label.Alignment = fyne.TextAlignCenter
 				updateStatusStyle(label, status.(binding.String))
 			case 3:
-				load, _ := item.GetItem("Load")
-				label.Bind(binding.IntToString(load.(binding.Int)))
-				updateLoadStyle(label, load.(binding.Int))
+				ping, _ := item.GetItem("Ping")
+				label.Bind(ping.(binding.String))
+				label.Alignment = fyne.TextAlignCenter
+				updatePingStyle(label, ping.(binding.String))
 			}
 		},
 	)
 
-	// Настройка размеров колонок
-	table.SetColumnWidth(0, 200)
-	table.SetColumnWidth(1, 250)
-	table.SetColumnWidth(2, 150)
-	table.SetColumnWidth(3, 100)
+	// Настройка размеров колонок - увеличиваем первую колонку
+	table.SetColumnWidth(0, 250) // Увеличили ширину первой колонки
+	table.SetColumnWidth(1, 150) // Host
+	table.SetColumnWidth(2, 100) // Status
+	table.SetColumnWidth(3, 80)  // Ping
 
-	// Кнопка обновления
-	refreshBtn := widget.NewButton("Refresh Status", func() {
-		checkAllServers(data)
+	// Кнопка обновления внизу
+	refreshBtn := widget.NewButtonWithIcon("Обновить", theme.ViewRefreshIcon(), func() {
+		go checkAllServers(data)
 	})
-	refreshBtn.Importance = widget.HighImportance
+	refreshBtn.Importance = widget.MediumImportance
 
 	// Заголовки таблицы
 	headers := container.NewGridWithColumns(4,
-		widget.NewLabelWithStyle("Server Name", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("Host", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("Status", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("Load %", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("Имя сервера", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("Адрес", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("Статус", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("Ping (мс)", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
 	)
 
 	// Первоначальная проверка серверов
@@ -104,16 +113,16 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 
 	// Создаем контейнер с прокруткой для таблицы
 	scrollContainer := container.NewScroll(table)
-	scrollContainer.SetMinSize(fyne.NewSize(800, 500))
+	scrollContainer.SetMinSize(fyne.NewSize(650, 400))
 
 	// Основной контейнер
 	mainContent := container.NewBorder(
 		container.NewVBox(
 			title,
-			container.NewCenter(refreshBtn),
+			widget.NewSeparator(),
 			headers,
 		),
-		nil,
+		container.NewCenter(refreshBtn),
 		nil,
 		nil,
 		scrollContainer,
@@ -122,7 +131,6 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 	return mainContent
 }
 
-// checkAllServers проверяет статус всех серверов
 func checkAllServers(data []binding.Struct) {
 	for i := range data {
 		go func(index int) {
@@ -134,110 +142,111 @@ func checkAllServers(data []binding.Struct) {
 			status, _ := item.GetItem("Status")
 			status.(binding.String).Set("Checking...")
 
-			// Выполняем ping
-			online := pingHost(hostStr)
+			ping, _ := item.GetItem("Ping")
+			ping.(binding.String).Set("...")
 
-			// Обновляем статус
+			// Выполняем ping и получаем время
+			online, pingTime := pingHost(hostStr)
+
+			// Обновляем статус и ping
 			if online {
 				status.(binding.String).Set("Online")
-				// Для ping нагрузку можно имитировать
-				load, _ := item.GetItem("Load")
-				load.(binding.Int).Set(rand.Intn(100))
+				ping.(binding.String).Set(fmt.Sprintf("%d ms", pingTime))
 			} else {
 				status.(binding.String).Set("Offline")
-				load, _ := item.GetItem("Load")
-				load.(binding.Int).Set(0)
+				ping.(binding.String).Set("Timeout")
 			}
 		}(i)
 	}
 }
 
-// pingHost выполняет ping указанного хоста
-func pingHost(host string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func pingHost(host string) (bool, int) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	var cmd *exec.Cmd
+	var pingTime int
 
-	// Определяем команду ping в зависимости от ОС
 	switch runtime.GOOS {
 	case "windows":
 		cmd = exec.CommandContext(ctx, "ping", "-n", "1", "-w", "1000", host)
 	case "linux", "darwin":
 		cmd = exec.CommandContext(ctx, "ping", "-c", "1", "-W", "1", host)
 	default:
-		return false
+		return false, 0
 	}
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return false
+		return false, 0
 	}
 
-	// Анализируем вывод команды ping
 	outputStr := strings.ToLower(string(output))
 	switch runtime.GOOS {
 	case "windows":
-		return strings.Contains(outputStr, "ttl=")
+		if strings.Contains(outputStr, "ttl=") {
+			timeIndex := strings.Index(outputStr, "time=")
+			if timeIndex != -1 {
+				timeStr := outputStr[timeIndex+5:]
+				endIndex := strings.Index(timeStr, "ms")
+				if endIndex != -1 {
+					timeStr = timeStr[:endIndex]
+					if t, err := strconv.Atoi(timeStr); err == nil {
+						pingTime = t
+					}
+				}
+			}
+			return true, pingTime
+		}
 	case "linux", "darwin":
-		return strings.Contains(outputStr, "1 packets received") ||
-			strings.Contains(outputStr, "1 received")
-	default:
-		return false
+		if strings.Contains(outputStr, "1 packets received") || strings.Contains(outputStr, "1 received") {
+			timeIndex := strings.Index(outputStr, "time=")
+			if timeIndex != -1 {
+				timeStr := outputStr[timeIndex+5:]
+				endIndex := strings.Index(timeStr, " ms")
+				if endIndex != -1 {
+					timeStr = timeStr[:endIndex]
+					if t, err := strconv.ParseFloat(timeStr, 64); err == nil {
+						pingTime = int(t)
+					}
+				}
+			}
+			return true, pingTime
+		}
 	}
+
+	return false, 0
 }
 
-// Остальные функции остаются без изменений
 func updateStatusStyle(label *widget.Label, status binding.String) {
 	statusStr, _ := status.Get()
-	if statusStr == "Online" {
+	switch statusStr {
+	case "Online":
 		label.Importance = widget.SuccessImportance
 		label.TextStyle = fyne.TextStyle{Bold: true}
-	} else {
+	case "Offline":
 		label.Importance = widget.DangerImportance
+		label.TextStyle = fyne.TextStyle{Bold: true}
+	default: // "Checking..."
+		label.Importance = widget.WarningImportance
 		label.TextStyle = fyne.TextStyle{Bold: false}
 	}
 	label.Refresh()
 }
 
-func updateLoadStyle(label *widget.Label, load binding.Int) {
-	loadVal, _ := load.Get()
-	if loadVal > 70 {
+func updatePingStyle(label *widget.Label, ping binding.String) {
+	pingStr, _ := ping.Get()
+
+	switch {
+	case pingStr == "N/A" || pingStr == "Timeout":
+		label.Importance = widget.DangerImportance
+	case pingStr == "...":
 		label.Importance = widget.WarningImportance
-	} else if loadVal > 30 {
+	default:
+		// Стиль для нормальных значений ping
 		label.Importance = widget.MediumImportance
-	} else {
-		label.Importance = widget.LowImportance
 	}
+
+	label.TextStyle = fyne.TextStyle{Bold: true}
 	label.Refresh()
-}
-
-// updateServerData обновляет данные серверов
-func updateServerData(data []binding.Struct) {
-	for i := range data {
-		// Обновляем статус случайным образом
-		newStatus := "Online"
-		if rand.Intn(10) < 2 { // 20% chance for offline
-			newStatus = "Offline"
-		}
-		status, _ := data[i].GetItem("Status")
-		status.(binding.String).Set(newStatus)
-
-		// Обновляем нагрузку
-		if newStatus == "Online" {
-			load, _ := data[i].GetItem("Load")
-			load.(binding.Int).Set(rand.Intn(100))
-		} else {
-			load, _ := data[i].GetItem("Load")
-			load.(binding.Int).Set(0)
-		}
-	}
-}
-
-// autoRefresh автоматически обновляет данные через заданный интервал
-func autoRefresh(data []binding.Struct, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	for range ticker.C {
-		updateServerData(data)
-	}
 }

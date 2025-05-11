@@ -64,7 +64,7 @@ VALUES
     (15, NULL, NULL, NULL, FALSE);       -- Chrome не имеет зависимостей
 
 ALTER TABLE software 
-ADD COLUMN download_url VARCHAR(1024);
+ADD COLUMN picture BYTEA;
 
 SELECT 
     name AS "Название ПО",

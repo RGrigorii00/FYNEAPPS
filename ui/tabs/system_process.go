@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
@@ -27,6 +28,10 @@ type ProcessInfo struct {
 }
 
 func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
+	title := canvas.NewText("Процессы компьютера", theme.Color(theme.ColorNameForeground))
+	title.TextSize = 24
+	title.Alignment = fyne.TextAlignCenter
+	title.TextStyle = fyne.TextStyle{Bold: true}
 	// Основная таблица процессов
 	processTable := widget.NewTable(
 		func() (int, int) { return 0, 6 },
@@ -144,6 +149,7 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 	// Компоновка элементов управления
 	controls := container.NewHBox(
 		container.NewVBox(
+			title,
 			container.NewHBox(
 				widget.NewLabel("Поиск:"),
 				searchEntry,

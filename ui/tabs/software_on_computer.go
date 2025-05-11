@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
@@ -31,6 +32,10 @@ var (
 )
 
 func CreateSoftwareTab(window fyne.Window) fyne.CanvasObject {
+	title := canvas.NewText("Программы на компьютере", theme.Color(theme.ColorNameForeground))
+	title.TextSize = 24
+	title.Alignment = fyne.TextAlignCenter
+	title.TextStyle = fyne.TextStyle{Bold: true}
 	// Основная таблица ПО
 	softwareTable := widget.NewTable(
 		func() (int, int) { return 0, 4 },
@@ -182,6 +187,7 @@ func CreateSoftwareTab(window fyne.Window) fyne.CanvasObject {
 	)
 
 	controls := container.NewBorder(
+		title,
 		nil, nil,
 		searchContainer,
 		sortContainer,

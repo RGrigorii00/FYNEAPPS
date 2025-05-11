@@ -13,7 +13,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -44,6 +46,7 @@ type AppCard struct {
 	Software
 	Card        *fyne.Container
 	DownloadBtn *widget.Button
+	ShowDetails bool // Добавляем поле для отслеживания состояния
 	ProgressBar *widget.ProgressBar
 }
 
@@ -209,6 +212,51 @@ func createAppCard(sw Software) (*fyne.Container, *widget.Button, *widget.Progre
 		}()
 	}
 
+	// Создаем лейбл для деталей (изначально скрыт)
+	detailsLabel := widget.NewLabel("")
+	detailsLabel.Wrapping = fyne.TextWrapWord
+	detailsLabel.Hide()
+
+	// Функция для обновления текста деталей
+	updateDetails := func() {
+		detailsText := fmt.Sprintf(
+			"Дата установки: %s\n"+
+				"Расположение: %s\n"+
+				"Размер: %.2f MB\n"+
+				"Архитектура: %s\n"+
+				"Производитель: %s",
+			sw.InstallDate.Format("2006-01-02"),
+			sw.InstallLocation,
+			sw.SizeMB,
+			sw.Architecture,
+			sw.Publisher,
+		)
+		detailsLabel.SetText(detailsText)
+	}
+
+	// Создаем кнопку "Подробнее"
+	detailsBtn := widget.NewButtonWithIcon("Подробнее", theme.InfoIcon(), func() {
+		// Переключаем состояние
+		showSoftwareInfo(sw)
+		for i := range appCards {
+			if appCards[i].ID == sw.ID {
+				appCards[i].ShowDetails = !appCards[i].ShowDetails
+				break
+			}
+		}
+
+		// Обновляем отображение
+		if detailsLabel.Visible() {
+			detailsLabel.Hide()
+		} else {
+			updateDetails()
+			detailsLabel.Show()
+		}
+
+		// Обновляем интерфейс
+		currentWindow.Content().Refresh()
+	})
+
 	// Создаем карточку с рамкой и центрированным содержимым
 	cardContent := container.NewVBox(
 		container.NewCenter(icon),
@@ -226,8 +274,17 @@ func createAppCard(sw Software) (*fyne.Container, *widget.Button, *widget.Progre
 					checkForUpdates(sw.ID)
 				}),
 				widget.NewButtonWithIcon("Запуск", theme.MediaPlayIcon(), func() {
-					showSoftwareInfo(sw)
+					if sw.InstallLocation != "" {
+						err := launchApplication(sw.InstallLocation)
+						if err != nil {
+							showInfoDialog("Ошибка", fmt.Sprintf("Не удалось запустить приложение: %v", err))
+						}
+					} else {
+						showInfoDialog("Ошибка", "Путь к приложению не указан в базе данных")
+					}
 				}),
+
+				detailsBtn, // Новая кнопка
 				layout.NewSpacer(),
 			),
 			container.NewPadded( // Контейнер с отступами для прогресс-бара
@@ -388,6 +445,28 @@ func formatSpeed(bytesPerSec float64) string {
 	default:
 		return fmt.Sprintf("%.0f B/s", bytesPerSec)
 	}
+}
+
+func launchApplication(path string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("cmd", "/C", "start", "", path)
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "linux":
+		cmd = exec.Command("xdg-open", path)
+	default:
+		return fmt.Errorf("неподдерживаемая платформа")
+	}
+
+	err := cmd.Start()
+	if err != nil {
+		return fmt.Errorf("ошибка запуска: %v", err)
+	}
+
+	return nil
 }
 
 func showSoftwareInfo(sw Software) {
