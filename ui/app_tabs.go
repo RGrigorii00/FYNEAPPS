@@ -46,20 +46,15 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	processBtn := widget.NewButtonWithIcon("Процессы компьютера", theme.ListIcon(), nil)
 	serverstatusBtn := widget.NewButtonWithIcon("Статус серверов ПГАТУ", theme.StorageIcon(), nil)
 	compterprogramsBtn := widget.NewButtonWithIcon("Программы на компьютере", theme.StorageIcon(), nil)
-	// // Создаем изображение из ресурса
-	// img := canvas.NewImageFromResource(resources.PortalIcon)
-	// img.FillMode = canvas.ImageFillContain
-	// img.SetMinSize(fyne.NewSize(32, 32)) // Настраиваем размер
 
 	// Создаем кастомную кнопку
 	portalBtn := widget.NewButton("", nil)
 	portalBtn.SetText("Портал ПГАТУ")
-	// portalBtn.SetIcon(resources.PortalIcon)
 	portalBtn.OnTapped = func() {
 		openBrowser("https://portal.pgatu.ru/")
 	}
 	siteBtn := widget.NewButtonWithIcon("Сайт ПГАТУ", theme.SettingsIcon(), func() {
-		openBrowser("https://pgsha.ru/today/")
+		openBrowser("https://pgatu.ru/today/")
 	})
 	repositoriiBtn := widget.NewButtonWithIcon("Последние обновления", theme.SettingsIcon(), func() {
 		openBrowser("https://github.com/RGrigorii00/FYNEAPPS/releases")
@@ -100,10 +95,6 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 	// Загрузка изображения
 	img := resources.ResourcePgatulogosmallPng // fyne.LoadResourceFromPath("images/main_screen/pgatu_logo_small.png")
-	// if err != nil {
-	// 	log.Println("Error loading image:", err)
-	// 	img = nil
-	// }
 
 	// Создаем изображение с возможностью управления размером
 	image := canvas.NewImageFromResource(img)
@@ -135,7 +126,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 			settingsBtn,
 			widget.NewSeparator(),
 			container.NewCenter( // Обертка для центрирования текста
-				widget.NewLabel("v0.0.6 alpha"),
+				widget.NewLabel("v0.0.7 alpha"),
 			),
 		),
 	)
@@ -148,19 +139,24 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	currentTab := tabs.CreateHardwareTab(window) // Начальная вкладка
 	content.Objects = []fyne.CanvasObject{currentTab}
 
-	// Обработчики для кнопок
+	// Обновленная функция setActiveButton
 	setActiveButton := func(activeBtn *widget.Button) {
 		for _, btn := range buttons {
-			btn.Importance = widget.MediumImportance
+			if btn == activeBtn {
+				btn.Importance = widget.HighImportance
+				btn.Refresh() // Обновляем отображение кнопки
+			} else {
+				btn.Importance = widget.MediumImportance
+				btn.Refresh() // Обновляем отображение кнопки
+			}
 		}
-		activeBtn.Importance = widget.HighImportance
 	}
 
-	setTab := func(tab fyne.CanvasObject, btn *widget.Button) {
-		setActiveButton(btn)
-		content.Objects = []fyne.CanvasObject{tab}
-		content.Refresh()
-	}
+	// setTab := func(tab fyne.CanvasObject, btn *widget.Button) {
+	// 	setActiveButton(btn)
+	// 	content.Objects = []fyne.CanvasObject{tab}
+	// 	content.Refresh()
+	// }
 
 	// Создаем подключение к базе данных
 	db := database.New()
@@ -175,18 +171,44 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 	// Устанавливаем соединение
 	db.Connect(opts)
-	// if err != nil {
-	// 	// Обработка ошибки подключения
-	// 	panic(err)
-	// }
 	defer db.Disconnect() // Закрываем соединение при выходе
 
-	cpuBtn.OnTapped = func() { setTab(tabs.CreateHardwareTab(window), cpuBtn) }
-	appslibraryBtn.OnTapped = func() { setTab(tabs.CreateAppsLibraryTab(window, db), appslibraryBtn) }
-	processBtn.OnTapped = func() { setTab(tabs.CreateProcessesTab(window), processBtn) }
-	serverstatusBtn.OnTapped = func() { setTab(tabs.CreateServerStatusTab(window), serverstatusBtn) }
-	compterprogramsBtn.OnTapped = func() { setTab(tabs.CreateSoftwareTab(window), serverstatusBtn) }
-	settingsBtn.OnTapped = func() { setTab(settings.CreateSettingsTab(window, myApp), serverstatusBtn) }
+	// Модифицированные обработчики для кнопок
+	cpuBtn.OnTapped = func() {
+		setActiveButton(cpuBtn)
+		content.Objects = []fyne.CanvasObject{tabs.CreateHardwareTab(window)}
+		content.Refresh()
+	}
+
+	appslibraryBtn.OnTapped = func() {
+		setActiveButton(appslibraryBtn)
+		content.Objects = []fyne.CanvasObject{tabs.CreateAppsLibraryTab(window, db)}
+		content.Refresh()
+	}
+
+	processBtn.OnTapped = func() {
+		setActiveButton(processBtn)
+		content.Objects = []fyne.CanvasObject{tabs.CreateProcessesTab(window)}
+		content.Refresh()
+	}
+
+	serverstatusBtn.OnTapped = func() {
+		setActiveButton(serverstatusBtn)
+		content.Objects = []fyne.CanvasObject{tabs.CreateServerStatusTab(window)}
+		content.Refresh()
+	}
+
+	compterprogramsBtn.OnTapped = func() {
+		setActiveButton(compterprogramsBtn)
+		content.Objects = []fyne.CanvasObject{tabs.CreateSoftwareTab(window)}
+		content.Refresh()
+	}
+
+	settingsBtn.OnTapped = func() {
+		setActiveButton(settingsBtn)
+		content.Objects = []fyne.CanvasObject{settings.CreateSettingsTab(window, myApp)}
+		content.Refresh()
+	}
 
 	// Устанавливаем активную кнопку по умолчанию
 	setActiveButton(cpuBtn)
@@ -227,7 +249,7 @@ func updateApp(window fyne.Window) {
 		defer dialog.Hide()
 
 		// 1. Проверка текущей версии (замените на свою логику)
-		currentVersion := "0.0.5" // Это должно быть из вашего приложения
+		currentVersion := "0.0.7" // Это должно быть из вашего приложения
 
 		// 2. Получение информации о последнем релизе
 		statusLabel.SetText("Получение информации о релизе...")

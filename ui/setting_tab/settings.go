@@ -148,7 +148,20 @@ func CreateSettingsTab(window fyne.Window, myApp fyne.App) fyne.CanvasObject {
 		if err := saveSettings(currentSettings); err != nil {
 			dialog.ShowError(err, window)
 		} else {
-			dialog.ShowInformation(GetLocalizedString("success"), GetLocalizedString("saved"), window)
+
+			// successDialog := dialog.NewCustom(
+			// 	GetLocalizedString("success"),
+			// 	"",
+			// 	container.NewVBox(
+			// 		widget.NewLabel(GetLocalizedString("saved")),
+			// 		widget.NewButton(GetLocalizedString("apply"), func() {
+			// 			// Действие при нажатии
+			// 			window.Close() // или другие действия
+			// 		}),
+			// 	),
+			// 	window,
+			// )
+			// successDialog.Show()
 		}
 	})
 

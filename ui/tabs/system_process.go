@@ -2,6 +2,7 @@ package tabs
 
 import (
 	"fmt"
+	"image/color"
 	"log"
 	"sort"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/shirou/gopsutil/process"
@@ -28,43 +28,75 @@ type ProcessInfo struct {
 }
 
 func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
-	title := canvas.NewText("Процессы компьютера", theme.Color(theme.ColorNameForeground))
+	title := canvas.NewText("Процессы компьютера", theme.ForegroundColor())
 	title.TextSize = 24
 	title.Alignment = fyne.TextAlignCenter
 	title.TextStyle = fyne.TextStyle{Bold: true}
-	// Основная таблица процессов
+
+	// Задаем фиксированные ширины столбцов (можно менять эти значения)
+	columnWidths := []float32{
+		80,  // PID
+		610, // Имя процесса
+		80,  // CPU %
+		100, // Память
+		120, // Статус
+		150, // Пользователь
+	}
+
+	// Создаем заголовки таблицы
+	headerRow := container.NewHBox()
+	headers := []string{"PID", "Имя процесса", "CPU %", "Память", "Статус", "Пользователь"}
+
+	// Указываем индивидуальные отступы ОТ ЛЕВОГО КРАЯ для каждого заголовка
+	headerLeftPaddings := []float32{
+		20,  // PID - 10px от левого края
+		270, // Имя процесса - 150px от левого края
+		230, // CPU % - 300px от левого края
+		20,  // Память - 400px от левого края
+		40,  // Статус - 500px от левого края
+		50,  // Пользователь - 600px от левого края
+	}
+
+	for i, header := range headers {
+
+		label := widget.NewLabel(header)
+		label.TextStyle = fyne.TextStyle{Bold: true}
+		label.Alignment = fyne.TextAlignLeading // Заголовки по левому краю
+
+		// Создаем контейнер с абсолютным позиционированием
+		paddedHeader := container.NewHBox()
+
+		// Добавляем отступ слева
+		if i < len(headerLeftPaddings) {
+			// Создаем невидимый элемент для отступа
+			spacer := canvas.NewRectangle(color.Transparent)
+			spacer.SetMinSize(fyne.NewSize(headerLeftPaddings[i], 1))
+			paddedHeader.Add(spacer)
+		}
+
+		// Добавляем сам заголовок
+		paddedHeader.Add(label)
+
+		headerRow.Add(paddedHeader)
+	}
+
+	// Создаем таблицу
 	processTable := widget.NewTable(
-		func() (int, int) { return 0, 6 },
+		func() (int, int) { return 0, len(columnWidths) },
 		func() fyne.CanvasObject {
-			return widget.NewLabel("")
+			label := widget.NewLabel("")
+			label.Alignment = fyne.TextAlignLeading // Выравнивание по левому краю
+			return label
 		},
 		func(id widget.TableCellID, obj fyne.CanvasObject) {
 			// Заполнение будет в updateProcesses
 		},
 	)
 
-	// Настройка размеров столбцов (автоматическое растягивание)
-	processTable.SetColumnWidth(0, 100) // PID
-	processTable.SetColumnWidth(1, 300) // Имя
-	processTable.SetColumnWidth(2, 100) // CPU
-	processTable.SetColumnWidth(3, 150) // Память
-	processTable.SetColumnWidth(4, 150) // Статус
-	processTable.SetColumnWidth(5, 200) // Пользователь
-
-	// Создаем контейнер с заголовками и таблицей
-	tableContainer := container.NewBorder(
-		// Заголовки таблицы
-		container.NewGridWithColumns(6,
-			widget.NewLabelWithStyle("PID", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			widget.NewLabelWithStyle("Имя процесса", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			widget.NewLabelWithStyle("CPU %", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-			widget.NewLabelWithStyle("Память (MB)", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-			widget.NewLabelWithStyle("Статус", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
-			widget.NewLabelWithStyle("Пользователь", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		),
-		nil, nil, nil,
-		container.NewScroll(processTable),
-	)
+	// Устанавливаем ширины столбцов
+	for i, width := range columnWidths {
+		processTable.SetColumnWidth(i, width)
+	}
 
 	// Элементы управления
 	searchEntry := widget.NewEntry()
@@ -89,8 +121,9 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 
 		fyne.Do(func() {
 			processTable.Length = func() (int, int) {
-				return len(filtered), 6
+				return len(filtered), len(columnWidths)
 			}
+
 			processTable.UpdateCell = func(id widget.TableCellID, obj fyne.CanvasObject) {
 				label := obj.(*widget.Label)
 				if id.Row >= len(filtered) {
@@ -111,8 +144,9 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 				case 4:
 					label.SetText(proc.Status)
 				case 5:
-					label.SetText(proc.User) // Убрано сокращение пользователя
+					label.SetText(proc.User)
 				}
+				label.Alignment = fyne.TextAlignLeading // Все ячейки по левому краю
 			}
 			processTable.Refresh()
 		})
@@ -147,35 +181,41 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 	})
 
 	// Компоновка элементов управления
-	controls := container.NewHBox(
+	controls := container.NewBorder(
+		nil, nil, nil, nil,
 		container.NewVBox(
 			title,
-			container.NewHBox(
+			container.NewBorder(
+				nil, nil,
 				widget.NewLabel("Поиск:"),
+				container.NewHBox(
+					widget.NewLabel("Сортировка:"),
+					sortSelect,
+					refreshBtn,
+				),
 				searchEntry,
 			),
 		),
-		layout.NewSpacer(),
-		container.NewHBox(
-			widget.NewLabel("Сортировка:"),
-			sortSelect,
-			refreshBtn,
-		),
 	)
 
-	// Главный контейнер с растягиванием на весь экран
+	// Главный контейнер
 	mainContent := container.NewBorder(
 		controls,
 		nil,
 		nil,
 		nil,
-		container.NewMax(tableContainer), // Используем Max для растягивания
+		container.NewBorder(
+			headerRow,
+			nil,
+			nil,
+			nil,
+			container.NewScroll(processTable),
+		),
 	)
 
 	return mainContent
 }
 
-// Остальные функции без изменений
 func getSystemProcesses() ([]ProcessInfo, error) {
 	processes, err := process.Processes()
 	if err != nil {

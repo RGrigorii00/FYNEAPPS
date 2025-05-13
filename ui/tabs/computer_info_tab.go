@@ -58,8 +58,6 @@ var (
 	computerID    int  // ID сохраненного компьютера в БД
 )
 
-// HardwareComponent and DiskInfo structs remain the same...
-
 func CreateHardwareTab(window fyne.Window) fyne.CanvasObject {
 	title := canvas.NewText("Мониторинг системы", theme.Color(theme.ColorNameForeground))
 	title.TextSize = 24
@@ -88,6 +86,9 @@ func CreateHardwareTab(window fyne.Window) fyne.CanvasObject {
 	)
 	scrollContainer.SetMinSize(fyne.NewSize(800, 600))
 
+	// Канал для остановки обновлений
+	stopChan := make(chan struct{})
+
 	// Функция обновления данных
 	updateData := func() {
 		components, err := getSystemComponents()
@@ -112,13 +113,18 @@ func CreateHardwareTab(window fyne.Window) fyne.CanvasObject {
 		}
 	}
 
-	// Первоначальное обновление
-	updateData()
-
-	autoRefresh := time.NewTicker(1 * time.Second)
+	// Запускаем периодическое обновление
 	go func() {
-		for range autoRefresh.C {
-			updateData()
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				updateData()
+			case <-stopChan:
+				return
+			}
 		}
 	}()
 
@@ -128,7 +134,7 @@ func CreateHardwareTab(window fyne.Window) fyne.CanvasObject {
 
 	// Очистка при закрытии
 	window.SetOnClosed(func() {
-		autoRefresh.Stop()
+		close(stopChan) // Останавливаем горутину обновления
 		if db != nil {
 			db.Close()
 		}
