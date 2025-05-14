@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -64,6 +65,7 @@ func init() {
 }
 
 func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.CanvasObject {
+
 	currentWindow = window
 	dbConn = db
 
@@ -71,6 +73,19 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 	title.TextSize = 24
 	title.Alignment = fyne.TextAlignCenter
 	title.TextStyle = fyne.TextStyle{Bold: true}
+
+	// Создаем поле поиска
+	searchEntry := widget.NewEntry()
+	searchEntry.SetPlaceHolder("Поиск приложений...")
+
+	searchEntry.OnChanged = func(query string) {
+		// Добавляем debounce на 300ms
+		time.AfterFunc(300*time.Millisecond, func() {
+			fyne.Do(func() {
+				filterApps(query)
+			})
+		})
+	}
 
 	scrollContainer := container.NewVScroll(nil)
 	scrollContainer.SetMinSize(fyne.NewSize(800, 600))
@@ -101,6 +116,7 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 
 		appCards = nil
 		grid := container.NewGridWithColumns(3)
+		grid.Layout = layout.NewAdaptiveGridLayout(3) // Используем адаптивный layout
 
 		for _, sw := range softwareList {
 			card, downloadBtn, progressBar, err := createAppCard(sw)
@@ -109,12 +125,13 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 				continue
 			}
 
-			appCards = append(appCards, AppCard{
+			appCard := AppCard{
 				Software:    sw,
 				Card:        card,
 				DownloadBtn: downloadBtn,
 				ProgressBar: progressBar,
-			})
+			}
+			appCards = append(appCards, appCard)
 
 			grid.Add(container.NewPadded(card))
 		}
@@ -124,8 +141,8 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 		}
 
 		scrollContainer.Content = container.NewVBox(
-			container.NewPadded(title),
-			widget.NewSeparator(),
+			// container.NewPadded(title),
+			// widget.NewSeparator(),
 			grid,
 		)
 	}
@@ -143,12 +160,35 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 	}()
 
 	return container.NewBorder(
-		nil,
+		container.NewVBox(
+			container.NewPadded(title),
+			widget.NewSeparator(),
+			container.NewPadded(searchEntry), // Добавляем поле поиска
+			widget.NewSeparator(),
+		),
 		container.NewHBox(layout.NewSpacer(), refreshBtn, layout.NewSpacer()),
 		nil,
 		nil,
 		scrollContainer,
 	)
+}
+
+func filterApps(query string) {
+	query = strings.ToLower(query)
+
+	// Сначала скроем все карточки, которые не соответствуют фильтру
+	for _, appCard := range appCards {
+		matches := strings.Contains(strings.ToLower(appCard.Name), query) ||
+			strings.Contains(strings.ToLower(appCard.Publisher), query) ||
+			strings.Contains(strings.ToLower(appCard.Version), query)
+
+		appCard.Card.Hidden = !matches
+	}
+
+	// Затем обновим layout, чтобы оставшиеся карточки сместились наверх
+	if currentWindow != nil {
+		currentWindow.Content().Refresh()
+	}
 }
 
 func createAppCard(sw Software) (*fyne.Container, *widget.Button, *widget.ProgressBar, error) {

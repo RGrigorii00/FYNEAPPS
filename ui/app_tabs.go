@@ -101,33 +101,46 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	image.FillMode = canvas.ImageFillContain // Сохраняет пропорции
 	image.SetMinSize(fyne.NewSize(150, 100)) // Устанавливаем минимальный размер (ширина, высота)
 
-	menu := container.NewBorder(
-		nil, // Верхний элемент (nil - нет элемента)
-		nil, // Нижний элемент
-		nil, // Левый элемент
-		nil, // Правый элемент
-		container.NewVBox(
-			container.NewCenter(
-				image,
-			),
-			container.NewCenter( // Обертка для центрирования текста
-				widget.NewLabel("ПГАТУ Инфраструктура"),
-			),
-			widget.NewSeparator(),
-			cpuBtn,
-			appslibraryBtn,
-			processBtn,
-			serverstatusBtn,
-			compterprogramsBtn,
-			portalBtn,
-			siteBtn,
-			updateBtn,
-			repositoriiBtn,
-			settingsBtn,
-			widget.NewSeparator(),
-			container.NewCenter( // Обертка для центрирования текста
-				widget.NewLabel("v0.0.7 alpha"),
-			),
+	systemGroup := container.NewVBox(
+		widget.NewLabel("Системные инструменты:"),
+		cpuBtn,
+		appslibraryBtn,
+		processBtn,
+		compterprogramsBtn,
+	)
+
+	webGroup := container.NewVBox(
+		widget.NewLabel("Веб-ресурсы:"),
+		serverstatusBtn,
+		portalBtn,
+		siteBtn,
+	)
+
+	appGroup := container.NewVBox(
+		widget.NewLabel("Управление приложением:"),
+		updateBtn,
+		repositoriiBtn,
+		settingsBtn,
+	)
+
+	menu := container.NewVBox(
+		container.NewCenter(
+			image,
+		),
+		container.NewCenter(
+			widget.NewLabel("ПГАТУ Инфраструктура"),
+		),
+		widget.NewSeparator(),
+
+		systemGroup,
+		layout.NewSpacer(),
+		webGroup,
+		layout.NewSpacer(),
+		appGroup,
+
+		widget.NewSeparator(),
+		container.NewCenter(
+			widget.NewLabel("v0.0.9 alpha"),
 		),
 	)
 
@@ -249,7 +262,7 @@ func updateApp(window fyne.Window) {
 		defer dialog.Hide()
 
 		// 1. Проверка текущей версии (замените на свою логику)
-		currentVersion := "0.0.7" // Это должно быть из вашего приложения
+		currentVersion := "0.0.9" // Это должно быть из вашего приложения
 
 		// 2. Получение информации о последнем релизе
 		statusLabel.SetText("Получение информации о релизе...")
