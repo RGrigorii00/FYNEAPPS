@@ -65,7 +65,6 @@ func init() {
 }
 
 func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.CanvasObject {
-
 	currentWindow = window
 	dbConn = db
 
@@ -74,21 +73,58 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 	title.Alignment = fyne.TextAlignCenter
 	title.TextStyle = fyne.TextStyle{Bold: true}
 
-	// Создаем поле поиска
 	searchEntry := widget.NewEntry()
 	searchEntry.SetPlaceHolder("Поиск приложений...")
 
+	// Создаем scrollContainer здесь
+	scrollContainer := container.NewVScroll(nil)
+	scrollContainer.SetMinSize(fyne.NewSize(800, 600))
+
+	// Объявляем filterApps как локальную функцию, которая имеет доступ к scrollContainer
+	filterApps := func(query string) {
+		query = strings.ToLower(query)
+
+		if scrollContainer.Content == nil {
+			return
+		}
+
+		// Получаем текущий grid-контейнер из scrollContainer
+		content, ok := scrollContainer.Content.(*fyne.Container)
+		if !ok || len(content.Objects) == 0 {
+			return
+		}
+
+		grid, ok := content.Objects[0].(*fyne.Container)
+		if !ok {
+			return
+		}
+
+		// Очищаем текущий grid
+		grid.Objects = nil
+
+		// Добавляем только подходящие карточки
+		for _, appCard := range appCards {
+			matches := strings.Contains(strings.ToLower(appCard.Name), query) ||
+				strings.Contains(strings.ToLower(appCard.Publisher), query) ||
+				strings.Contains(strings.ToLower(appCard.Version), query)
+
+			if matches {
+				grid.Add(appCard.Card)
+			}
+		}
+
+		// Обновляем layout
+		grid.Refresh()
+		scrollContainer.Refresh()
+	}
+
 	searchEntry.OnChanged = func(query string) {
-		// Добавляем debounce на 300ms
 		time.AfterFunc(300*time.Millisecond, func() {
 			fyne.Do(func() {
-				filterApps(query)
+				filterApps(query) // Вызываем локальную функцию
 			})
 		})
 	}
-
-	scrollContainer := container.NewVScroll(nil)
-	scrollContainer.SetMinSize(fyne.NewSize(800, 600))
 
 	updateContent := func() {
 		if !dbConn.IsConnected() {
@@ -116,7 +152,6 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 
 		appCards = nil
 		grid := container.NewGridWithColumns(3)
-		grid.Layout = layout.NewAdaptiveGridLayout(3) // Используем адаптивный layout
 
 		for _, sw := range softwareList {
 			card, downloadBtn, progressBar, err := createAppCard(sw)
@@ -136,15 +171,7 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 			grid.Add(container.NewPadded(card))
 		}
 
-		for i := len(softwareList); i%3 != 0; i++ {
-			grid.Add(container.NewPadded(widget.NewLabel("")))
-		}
-
-		scrollContainer.Content = container.NewVBox(
-			// container.NewPadded(title),
-			// widget.NewSeparator(),
-			grid,
-		)
+		scrollContainer.Content = container.NewVBox(grid)
 	}
 
 	updateContent()
@@ -152,18 +179,11 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 	refreshBtn := widget.NewButtonWithIcon("Обновить", theme.ViewRefreshIcon(), updateContent)
 	refreshBtn.Importance = widget.MediumImportance
 
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		for range ticker.C {
-			updateContent()
-		}
-	}()
-
 	return container.NewBorder(
 		container.NewVBox(
 			container.NewPadded(title),
 			widget.NewSeparator(),
-			container.NewPadded(searchEntry), // Добавляем поле поиска
+			container.NewPadded(searchEntry),
 			widget.NewSeparator(),
 		),
 		container.NewHBox(layout.NewSpacer(), refreshBtn, layout.NewSpacer()),
@@ -173,22 +193,41 @@ func CreateAppsLibraryTab(window fyne.Window, db *database.PGConnection) fyne.Ca
 	)
 }
 
-func filterApps(query string) {
+func filterApps(query string, scrollContainer *container.Scroll) {
 	query = strings.ToLower(query)
 
-	// Сначала скроем все карточки, которые не соответствуют фильтру
+	if scrollContainer == nil || scrollContainer.Content == nil {
+		return
+	}
+
+	// Получаем текущий grid-контейнер из scrollContainer
+	content, ok := scrollContainer.Content.(*fyne.Container)
+	if !ok || len(content.Objects) == 0 {
+		return
+	}
+
+	grid, ok := content.Objects[0].(*fyne.Container)
+	if !ok {
+		return
+	}
+
+	// Очищаем текущий grid
+	grid.Objects = nil
+
+	// Добавляем только подходящие карточки
 	for _, appCard := range appCards {
 		matches := strings.Contains(strings.ToLower(appCard.Name), query) ||
 			strings.Contains(strings.ToLower(appCard.Publisher), query) ||
 			strings.Contains(strings.ToLower(appCard.Version), query)
 
-		appCard.Card.Hidden = !matches
+		if matches {
+			grid.Add(appCard.Card)
+		}
 	}
 
-	// Затем обновим layout, чтобы оставшиеся карточки сместились наверх
-	if currentWindow != nil {
-		currentWindow.Content().Refresh()
-	}
+	// Обновляем layout
+	grid.Refresh()
+	scrollContainer.Refresh()
 }
 
 func createAppCard(sw Software) (*fyne.Container, *widget.Button, *widget.ProgressBar, error) {
@@ -354,7 +393,7 @@ func createAppCard(sw Software) (*fyne.Container, *widget.Button, *widget.Progre
 
 func loadLatestSoftwareVersions() ([]Software, error) {
 	query := `
-		SELECT s.software_id, s.name, s.version, s.publisher, s.install_date, 
+		SELECT s.software_id, s.name, s.version, s.publisher, s.install_date,
 		       s.install_location, s.size_mb, s.is_system_component, 
 		       s.is_update, s.architecture, s.last_used_date, s.timestamp,
 		       s.download_url

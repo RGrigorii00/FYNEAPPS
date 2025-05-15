@@ -185,6 +185,7 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 		nil, nil, nil, nil,
 		container.NewVBox(
 			title,
+			widget.NewSeparator(),
 			container.NewBorder(
 				nil, nil,
 				widget.NewLabel("Поиск:"),
@@ -198,14 +199,18 @@ func CreateProcessesTab(window fyne.Window) fyne.CanvasObject {
 		),
 	)
 
-	// Главный контейнер
 	mainContent := container.NewBorder(
-		controls,
-		nil,
-		nil,
-		nil,
+		// Верхняя часть - все элементы выше таблицы
+		container.NewVBox(
+			controls,
+			widget.NewSeparator(),
+		),
+		nil, // Нижняя часть - пустая
+		nil, // Левая часть - пустая
+		nil, // Правая часть - пустая
+		// Основное содержимое - таблица
 		container.NewBorder(
-			headerRow,
+			headerRow, // Заголовки таблицы
 			nil,
 			nil,
 			nil,

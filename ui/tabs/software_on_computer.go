@@ -201,6 +201,7 @@ func CreateSoftwareTab(window fyne.Window) fyne.CanvasObject {
 		nil, nil, nil, nil,
 		container.NewVBox(
 			title,
+			widget.NewSeparator(),
 			container.NewBorder(
 				nil, nil,
 				widget.NewLabel("Поиск:"),
@@ -216,7 +217,10 @@ func CreateSoftwareTab(window fyne.Window) fyne.CanvasObject {
 
 	// Главный контейнер
 	mainContent := container.NewBorder(
-		controls,
+		container.NewVBox(
+			controls,
+			widget.NewSeparator(),
+		),
 		nil,
 		nil,
 		nil,

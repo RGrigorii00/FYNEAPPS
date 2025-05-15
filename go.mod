@@ -3,9 +3,9 @@ module FYNEAPPS
 go 1.23.4
 
 require (
-	fyne.io/fyne v1.4.3
 	fyne.io/fyne/v2 v2.6.0
 	github.com/getlantern/systray v1.2.2
+	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shirou/gopsutil/v3 v3.24.5
@@ -40,7 +40,6 @@ require (
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
-	github.com/lxn/win v0.0.0-20210218163916-a377121e959e // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.5.1 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect

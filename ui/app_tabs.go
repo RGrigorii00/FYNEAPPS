@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -37,6 +38,15 @@ var (
 	serverstatusBtn, portalBtn, siteBtn    *widget.Button
 	updateBtn, repositoriiBtn, settingsBtn *widget.Button
 )
+
+type User struct {
+	ID        int       `json:"id"`
+	Username  string    `json:"username"`
+	FullName  string    `json:"full_name"`
+	SessionID string    `json:"session_id"`
+	ExpiresAt time.Time `json:"expires_at"`
+	LoggedIn  bool      `json:"logged_in"`
+}
 
 func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	// Создаем кнопки с иконками для вертикального меню
@@ -140,7 +150,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 		widget.NewSeparator(),
 		container.NewCenter(
-			widget.NewLabel("v0.0.9 alpha"),
+			widget.NewLabel("v0.0.10 alpha"),
 		),
 	)
 
@@ -262,7 +272,7 @@ func updateApp(window fyne.Window) {
 		defer dialog.Hide()
 
 		// 1. Проверка текущей версии (замените на свою логику)
-		currentVersion := "0.0.9" // Это должно быть из вашего приложения
+		currentVersion := "0.0.10" // Это должно быть из вашего приложения
 
 		// 2. Получение информации о последнем релизе
 		statusLabel.SetText("Получение информации о релизе...")

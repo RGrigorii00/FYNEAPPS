@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"image/color"
 	"log"
 	"os/exec"
 	"os/user"
@@ -282,51 +281,47 @@ func createHardwareCard(component HardwareComponent) fyne.CanvasObject {
 	nameLabel.TextStyle = fyne.TextStyle{Bold: true}
 	nameLabel.Alignment = fyne.TextAlignCenter
 
-	// Прогресс-бар для компонентов с показателем использования
+	// Прогресс-бар с отступами
 	var usageDisplay fyne.CanvasObject
 	if component.Usage > 0 {
-		usageLabel := widget.NewLabel(fmt.Sprintf("Использование: %.1f%%", component.Usage))
 		usageBar := widget.NewProgressBar()
 		usageBar.SetValue(component.Usage / 100)
-		usageBar.TextFormatter = func() string {
-			return fmt.Sprintf("%.1f%%", component.Usage)
-		}
-		usageDisplay = container.NewVBox(usageLabel, usageBar)
-	} else {
-		usageDisplay = layout.NewSpacer()
+		usageBar.TextFormatter = func() string { return fmt.Sprintf("%.1f%%", component.Usage) }
+		usageBar.Resize(fyne.NewSize(200, usageBar.MinSize().Height)) // Устанавливаем ширину
+
+		usageDisplay = container.NewVBox(
+			widget.NewLabel(fmt.Sprintf("Использование: %.1f%%", component.Usage)),
+			container.NewPadded(usageBar), // Добавляем отступы
+		)
 	}
 
-	// Основной контейнер для деталей
+	// Детали
 	detailsContainer := container.NewVBox()
-
-	// Сортируем ключи деталей для стабильного порядка
 	var keys []string
 	for key := range component.Details {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys) // Сортируем ключи для стабильного порядка
+	sort.Strings(keys)
 
-	// Добавляем обычные детали в отсортированном порядке
 	for _, key := range keys {
-		value := component.Details[key]
-		detailRow := container.NewHBox(
+		detailsContainer.Add(container.NewHBox(
 			widget.NewLabel(fmt.Sprintf("%s:", key)),
 			layout.NewSpacer(),
-			widget.NewLabel(value),
-		)
-		detailsContainer.Add(detailRow)
+			widget.NewLabel(component.Details[key]),
+		))
 	}
 
-	// Особый случай для дисков - добавляем подразделы
+	// Диски с прогресс-барами с отступами
 	if component.ID == "disks" && len(component.Disks) > 0 {
 		detailsContainer.Add(widget.NewSeparator())
-		detailsContainer.Add(widget.NewLabel("Подробно о дисках:"))
+		detailsContainer.Add(widget.NewLabel(fmt.Sprintf("Диски (%d):", len(component.Disks))))
 
-		for _, disk := range component.Disks {
+		for i, disk := range component.Disks {
 			diskBar := widget.NewProgressBar()
 			diskBar.SetValue(disk.Usage / 100)
+			diskBar.Resize(fyne.NewSize(200, diskBar.MinSize().Height)) // Устанавливаем ширину
 
-			diskCard := container.NewVBox(
+			detailsContainer.Add(container.NewVBox(
 				widget.NewLabel(fmt.Sprintf("Диск: %s (%s)", disk.Name, disk.MountPath)),
 				container.NewHBox(
 					widget.NewLabel("Использовано:"),
@@ -336,45 +331,37 @@ func createHardwareCard(component HardwareComponent) fyne.CanvasObject {
 						float64(disk.Used)/1024/1024/1024,
 						float64(disk.Total)/1024/1024/1024)),
 				),
-				diskBar,
-				widget.NewSeparator(),
-			)
-			detailsContainer.Add(diskCard)
+				container.NewPadded(diskBar), // Добавляем отступы
+			))
+
+			if i < len(component.Disks)-1 {
+				detailsContainer.Add(widget.NewSeparator())
+			}
 		}
 	}
 
-	// Основное содержимое карточки
+	// Основное содержимое
 	cardContent := container.NewVBox(
-		container.NewHBox(
-			layout.NewSpacer(),
-			widget.NewIcon(component.Icon),
-			layout.NewSpacer(),
-		),
+		container.NewCenter(widget.NewIcon(component.Icon)),
 		container.NewCenter(nameLabel),
 		widget.NewSeparator(),
-		usageDisplay,
-		widget.NewSeparator(),
-		detailsContainer,
 	)
+	if usageDisplay != nil {
+		cardContent.Add(usageDisplay)
+		cardContent.Add(widget.NewSeparator())
+	}
+	cardContent.Add(detailsContainer)
 
-	// Стилизация карточки
+	// Стиль карточки
 	cardBackground := canvas.NewRectangle(theme.Color(theme.ColorNameBackground))
 	cardBackground.CornerRadius = 12
 	cardBackground.StrokeColor = theme.Color(theme.ColorNameSeparator)
 	cardBackground.StrokeWidth = 1
 
-	shadow := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 30})
-	shadow.CornerRadius = 12
-
-	card := container.NewStack(
-		container.NewPadded(shadow),
-		container.NewStack(
-			cardBackground,
-			container.NewPadded(cardContent),
-		),
+	return container.NewStack(
+		cardBackground,
+		container.NewPadded(cardContent),
 	)
-
-	return container.NewPadded(card)
 }
 
 // Сохраняет или обновляет информацию о компьютере
