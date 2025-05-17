@@ -48,6 +48,12 @@ type User struct {
 	LoggedIn  bool      `json:"logged_in"`
 }
 
+// Добавьте глобальные переменные для управления состоянием вкладки
+var (
+	ticketsTab     fyne.CanvasObject
+	ticketsCleanup func()
+)
+
 func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	// Создаем кнопки с иконками для вертикального меню
 
@@ -56,6 +62,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	processBtn := widget.NewButtonWithIcon("Процессы компьютера", theme.ListIcon(), nil)
 	serverstatusBtn := widget.NewButtonWithIcon("Статус серверов ПГАТУ", theme.StorageIcon(), nil)
 	compterprogramsBtn := widget.NewButtonWithIcon("Программы на компьютере", theme.StorageIcon(), nil)
+	ticketBtn := widget.NewButtonWithIcon("Тикеты", theme.StorageIcon(), nil)
 
 	// Создаем кастомную кнопку
 	portalBtn := widget.NewButton("", nil)
@@ -81,7 +88,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	})
 
 	// Настраиваем стиль кнопок
-	buttons := []*widget.Button{cpuBtn, appslibraryBtn, processBtn, serverstatusBtn, compterprogramsBtn, portalBtn, siteBtn, updateBtn, repositoriiBtn, settingsBtn}
+	buttons := []*widget.Button{cpuBtn, appslibraryBtn, processBtn, serverstatusBtn, compterprogramsBtn, ticketBtn, portalBtn, siteBtn, updateBtn, repositoriiBtn, settingsBtn}
 	for _, btn := range buttons {
 		btn.Alignment = widget.ButtonAlignLeading
 		btn.Importance = widget.MediumImportance
@@ -117,6 +124,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 		appslibraryBtn,
 		processBtn,
 		compterprogramsBtn,
+		ticketBtn,
 	)
 
 	webGroup := container.NewVBox(
@@ -150,7 +158,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 		widget.NewSeparator(),
 		container.NewCenter(
-			widget.NewLabel("v0.0.10 alpha"),
+			widget.NewLabel("v0.0.12 alpha"),
 		),
 	)
 
@@ -227,6 +235,22 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 		content.Refresh()
 	}
 
+	ticketBtn.OnTapped = func() {
+		setActiveButton(ticketBtn)
+
+		// Очищаем предыдущую вкладку, если она существует
+		if ticketsCleanup != nil {
+			ticketsCleanup()
+		}
+
+		// Создаем новую вкладку
+		tab, cleanup := tabs.CreateTicketsTab(window)
+		ticketsCleanup = cleanup
+
+		content.Objects = []fyne.CanvasObject{tab}
+		content.Refresh()
+	}
+
 	settingsBtn.OnTapped = func() {
 		setActiveButton(settingsBtn)
 		content.Objects = []fyne.CanvasObject{settings.CreateSettingsTab(window, myApp)}
@@ -254,6 +278,14 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 	)
 }
 
+// Добавьте функцию для очистки при закрытии приложения
+func cleanupApp() {
+	if ticketsCleanup != nil {
+		ticketsCleanup()
+	}
+	// ... другие cleanup-функции ...
+}
+
 // updateApp проверяет и устанавливает обновления
 func updateApp(window fyne.Window) {
 	progress := widget.NewProgressBarInfinite()
@@ -272,7 +304,7 @@ func updateApp(window fyne.Window) {
 		defer dialog.Hide()
 
 		// 1. Проверка текущей версии (замените на свою логику)
-		currentVersion := "0.0.10" // Это должно быть из вашего приложения
+		currentVersion := "0.0.12" // Это должно быть из вашего приложения
 
 		// 2. Получение информации о последнем релизе
 		statusLabel.SetText("Получение информации о релизе...")
