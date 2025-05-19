@@ -237,17 +237,8 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 	ticketBtn.OnTapped = func() {
 		setActiveButton(ticketBtn)
-
-		// Очищаем предыдущую вкладку, если она существует
-		if ticketsCleanup != nil {
-			ticketsCleanup()
-		}
-
-		// Создаем новую вкладку
-		tab, cleanup := tabs.CreateTicketsTab(window)
-		ticketsCleanup = cleanup
-
-		content.Objects = []fyne.CanvasObject{tab}
+		contentObj, _ := tabs.CreateTicketsTab(window)
+		content.Objects = []fyne.CanvasObject{contentObj}
 		content.Refresh()
 	}
 
