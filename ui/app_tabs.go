@@ -158,7 +158,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 		widget.NewSeparator(),
 		container.NewCenter(
-			widget.NewLabel("v0.0.12 alpha"),
+			widget.NewLabel("v0.0.14 alpha"),
 		),
 	)
 
@@ -295,7 +295,7 @@ func updateApp(window fyne.Window) {
 		defer dialog.Hide()
 
 		// 1. Проверка текущей версии (замените на свою логику)
-		currentVersion := "0.0.12" // Это должно быть из вашего приложения
+		currentVersion := "0.0.14" // Это должно быть из вашего приложения
 
 		// 2. Получение информации о последнем релизе
 		statusLabel.SetText("Получение информации о релизе...")

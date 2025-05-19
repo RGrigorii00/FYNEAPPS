@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
@@ -12,42 +13,98 @@ import (
 
 // CustomDialog представляет кастомное диалоговое окно
 type CustomDialog struct {
-	window    fyne.Window
+	parent    fyne.Window
+	overlay   *widget.PopUp
+	onConfirm func()
 	onDismiss func()
 }
 
-// NewErrorDialog создает диалог для отображения ошибок
-func NewErrorDialog(title, message string, app fyne.App) *CustomDialog {
-	d := &CustomDialog{}
+// NewDialog создает новое диалоговое окно
+func NewDialog(title, message string, parent fyne.Window) *CustomDialog {
+	d := &CustomDialog{parent: parent}
 
-	d.window = app.NewWindow(title)
-	d.window.SetFixedSize(true)
-	d.window.Resize(fyne.NewSize(300, 150))
-	d.window.CenterOnScreen()
+	// Создаем контент диалога
+	titleLabel := widget.NewLabel(title)
+	titleLabel.TextStyle = fyne.TextStyle{Bold: true}
+	titleLabel.Alignment = fyne.TextAlignCenter
+
+	messageLabel := widget.NewLabel(message)
+	messageLabel.Wrapping = fyne.TextWrapWord
+	messageLabel.Alignment = fyne.TextAlignCenter
+
+	okButton := widget.NewButton("OK", func() {
+		d.Hide()
+		if d.onConfirm != nil {
+			d.onConfirm()
+		}
+	})
 
 	content := container.NewVBox(
-		container.NewHBox(
-			widget.NewIcon(theme.ErrorIcon()),
-			widget.NewLabel(message),
-		),
+		titleLabel,
+		widget.NewSeparator(),
+		messageLabel,
 		layout.NewSpacer(),
-		container.NewCenter(
-			widget.NewButton("OK", func() {
-				d.window.Hide()
-				if d.onDismiss != nil {
-					d.onDismiss()
-				}
-			}),
-		),
+		container.NewCenter(okButton),
 	)
 
-	d.window.SetContent(content)
+	// Создаем карточку диалога с рамкой
+	dialogCard := container.NewStack(
+		canvas.NewRectangle(theme.BackgroundColor()),
+		container.NewPadded(content),
+	)
+
+	// Создаем PopUp без overlay
+	d.overlay = widget.NewModalPopUp(
+		container.NewCenter(dialogCard),
+		parent.Canvas(),
+	)
+
+	// Устанавливаем размер диалога
+	dialogSize := fyne.NewSize(300, 150)
+	dialogCard.Resize(dialogSize)
+	d.overlay.Resize(dialogSize)
+
 	return d
 }
 
-// CreateLoginWindow создает красивое окно входа в систему
-func CreateLoginWindow(a fyne.App, onLogin func(string, string) bool) fyne.Window {
-	loginWindow := a.NewWindow("Вход в систему")
+// Show отображает диалоговое окно
+func (d *CustomDialog) Show() {
+	d.overlay.Show()
+}
+
+// Hide скрывает диалоговое окно
+func (d *CustomDialog) Hide() {
+	d.overlay.Hide()
+	if d.onDismiss != nil {
+		d.onDismiss()
+	}
+}
+
+// SetOnConfirm устанавливает callback для кнопки OK
+func (d *CustomDialog) SetOnConfirm(callback func()) {
+	d.onConfirm = callback
+}
+
+// SetOnDismiss устанавливает callback при закрытии окна
+func (d *CustomDialog) SetOnDismiss(callback func()) {
+	d.onDismiss = callback
+}
+
+// ShowErrorDialog отображает диалог с ошибкой
+func ShowErrorDialog(message string, parent fyne.Window) {
+	d := NewDialog("Ошибка", message, parent)
+	d.Show()
+}
+
+// ShowSuccessDialog отображает диалог с успешным выполнением
+func ShowSuccessDialog(message string, parent fyne.Window) {
+	d := NewDialog("Успешно", message, parent)
+	d.Show()
+}
+
+// CreateLoginWindow создает окно входа в систему
+func CreateLoginWindow(app fyne.App, onLogin func(string, string) bool) fyne.Window {
+	loginWindow := app.NewWindow("Вход в систему")
 	loginWindow.SetFixedSize(true)
 	loginWindow.Resize(fyne.NewSize(400, 300))
 	loginWindow.CenterOnScreen()
@@ -78,38 +135,42 @@ func CreateLoginWindow(a fyne.App, onLogin func(string, string) bool) fyne.Windo
 		return nil
 	}
 
-	form := &widget.Form{
-		Items: []*widget.FormItem{
-			{Text: "", Widget: username},
-			{Text: "", Widget: password},
-		},
-		SubmitText: "Войти",
-		CancelText: "Отмена",
-		OnSubmit: func() {
-			if err := username.Validate(); err != nil {
-				// NewErrorDialog("Ошибка", err.Error(), a).Show()
-				return
-			}
+	loginButton := widget.NewButton("Войти", func() {
+		// Валидация логина
+		if err := username.Validate(); err != nil {
+			ShowErrorDialog(err.Error(), loginWindow)
+			return
+		}
 
-			if err := password.Validate(); err != nil {
-				// NewErrorDialog("Ошибка", err.Error(), a).Show()
-				return
-			}
+		// Валидация пароля
+		if err := password.Validate(); err != nil {
+			ShowErrorDialog(err.Error(), loginWindow)
+			return
+		}
 
-			if onLogin(username.Text, password.Text) {
-				loginWindow.Hide()
-			} else {
-				// NewErrorDialog(
-				// 	"Ошибка входа",
-				// 	"Неверный логин или пароль",
-				// 	a,
-				// ).Show()
-			}
-		},
-		OnCancel: func() {
-			// a.Quit()
-		},
-	}
+		// Проверка учетных данных
+		if onLogin(username.Text, password.Text) {
+			ShowSuccessDialog("Успешный вход в систему", loginWindow)
+			loginWindow.Hide()
+		} else {
+			ShowErrorDialog("Неверный логин или пароль", loginWindow)
+		}
+	})
+
+	cancelButton := widget.NewButton("Отмена", func() {
+		loginWindow.Close()
+	})
+
+	form := container.NewVBox(
+		container.NewPadded(username),
+		container.NewPadded(password),
+		container.NewHBox(
+			layout.NewSpacer(),
+			container.NewPadded(cancelButton),
+			container.NewPadded(loginButton),
+			layout.NewSpacer(),
+		),
+	)
 
 	// Компоновка интерфейса
 	content := container.NewVBox(
@@ -118,7 +179,7 @@ func CreateLoginWindow(a fyne.App, onLogin func(string, string) bool) fyne.Windo
 		layout.NewSpacer(),
 		form,
 		layout.NewSpacer(),
-		widget.NewLabel("© ПГАТУ"),
+		container.NewCenter(widget.NewLabel("© ПГАТУ")),
 	)
 
 	loginWindow.SetContent(content)

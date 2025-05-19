@@ -15,7 +15,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/dialog"
 	"github.com/getlantern/systray"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -216,13 +215,11 @@ func showLoginWindow() {
 
 	loginWindow = ui.CreateLoginWindow(myApp, func(username, password string) bool {
 		if username == "" || password == "" {
-			dialog.ShowError(fmt.Errorf("Введите логин и пароль"), loginWindow)
 			return false
 		}
 
 		user, err := authenticate(username, password)
 		if err != nil {
-			dialog.ShowError(fmt.Errorf("Ошибка входа: %v", err), loginWindow)
 			return false
 		}
 
@@ -233,7 +230,6 @@ func showLoginWindow() {
 			return true
 		}
 
-		dialog.ShowError(fmt.Errorf("Неверные учетные данные"), loginWindow)
 		return false
 	})
 

@@ -46,14 +46,22 @@ type TicketsTab struct {
 	sortField      string
 	sortDescending bool
 	ticketsList    *widget.List
+	split          *container.Split
+	statusSelect   *widget.Select
 }
 
 var (
-	dbtOnce  sync.Once
-	dbtMutex sync.RWMutex
+	dbtOnce      sync.Once
+	dbtMutex     sync.RWMutex
+	statuses     = []string{"Новый", "В процессе", "Завершен"}
+	statusValues = map[string]int{
+		"Новый":      1,
+		"В процессе": 2,
+		"Завершен":   3,
+	}
 )
 
-func (t *TicketsTab) showCustomDialog(title, message string, icon fyne.Resource) {
+func showCustomDialog(tab *TicketsTab, title, message string, icon fyne.Resource) {
 	dialog.ShowCustom(
 		title,
 		"OK",
@@ -61,11 +69,11 @@ func (t *TicketsTab) showCustomDialog(title, message string, icon fyne.Resource)
 			widget.NewIcon(icon),
 			widget.NewLabel(message),
 		),
-		t.window,
+		tab.window,
 	)
 }
 
-func (t *TicketsTab) showCustomConfirmDialog(title, message string, icon fyne.Resource, confirmFunc func(bool)) {
+func showCustomConfirmDialog(tab *TicketsTab, title, message string, icon fyne.Resource, confirmFunc func(bool)) {
 	content := container.NewVBox(
 		widget.NewIcon(icon),
 		widget.NewLabel(message),
@@ -77,7 +85,7 @@ func (t *TicketsTab) showCustomConfirmDialog(title, message string, icon fyne.Re
 		"Нет",
 		content,
 		confirmFunc,
-		t.window,
+		tab.window,
 	)
 	d.Show()
 }
@@ -95,25 +103,25 @@ func getStatusColor(statusName string) color.Color {
 	}
 }
 
-func (t *TicketsTab) getDB() (*sql.DB, error) {
+func getDB(tab *TicketsTab) (*sql.DB, error) {
 	var initErr error
 	dbtOnce.Do(func() {
 		connStr := "user=user dbname=grafana_db password=user host=83.166.245.249 port=5432 sslmode=disable"
-		t.dbt, initErr = sql.Open("postgres", connStr)
+		tab.dbt, initErr = sql.Open("postgres", connStr)
 		if initErr != nil {
 			return
 		}
 
-		t.dbt.SetMaxOpenConns(25)
-		t.dbt.SetMaxIdleConns(5)
-		t.dbt.SetConnMaxLifetime(5 * time.Minute)
+		tab.dbt.SetMaxOpenConns(25)
+		tab.dbt.SetMaxIdleConns(5)
+		tab.dbt.SetConnMaxLifetime(5 * time.Minute)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		initErr = t.dbt.PingContext(ctx)
+		initErr = tab.dbt.PingContext(ctx)
 	})
 
-	return t.dbt, initErr
+	return tab.dbt, initErr
 }
 
 func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
@@ -125,8 +133,8 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 		sortDescending: true,
 	}
 
-	if _, err := tab.getDB(); err != nil {
-		tab.showCustomDialog("Ошибка", "Ошибка подключения к базе данных: "+err.Error(), theme.ErrorIcon())
+	if _, err := getDB(tab); err != nil {
+		showCustomDialog(tab, "Ошибка", "Ошибка подключения к базе данных: "+err.Error(), theme.ErrorIcon())
 		return widget.NewLabel("Ошибка подключения к БД"), func() {}
 	}
 
@@ -180,41 +188,42 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 		},
 		func() fyne.CanvasObject {
 			card := canvas.NewRectangle(color.White)
-			card.CornerRadius = 8
+			card.CornerRadius = 4
 			card.StrokeWidth = 1
 			card.StrokeColor = color.RGBA{R: 200, G: 200, B: 200, A: 255}
 
 			selectionBorder := canvas.NewRectangle(color.Transparent)
-			selectionBorder.CornerRadius = 8
-			selectionBorder.StrokeWidth = 4
+			selectionBorder.CornerRadius = 4
+			selectionBorder.StrokeWidth = 2
 			selectionBorder.StrokeColor = theme.PrimaryColor()
 
-			titleLabel := widget.NewLabel("Template")
+			titleLabel := widget.NewLabel("")
 			titleLabel.TextStyle = fyne.TextStyle{Bold: true}
 			titleLabel.Truncation = fyne.TextTruncateEllipsis
+			titleLabel.Wrapping = fyne.TextWrapWord
 
-			descLabel := widget.NewLabel("Template description")
+			descLabel := widget.NewLabel("")
 			descLabel.Wrapping = fyne.TextWrapWord
 			descLabel.TextStyle = fyne.TextStyle{Italic: true}
 
 			metaContainer := container.NewGridWithColumns(2,
-				widget.NewLabel("User ID:"),
-				widget.NewLabel("0"),
-				widget.NewLabel("Computer:"),
-				widget.NewLabel("Template"),
-				widget.NewLabel("Status:"),
-				widget.NewLabel("Template"),
-				widget.NewLabel("Cabinet:"),
-				widget.NewLabel("0"),
-				widget.NewLabel("Created:"),
-				widget.NewLabel("не указана"),
-				widget.NewLabel("Updated:"),
-				widget.NewLabel("не обновлялся"),
+				widget.NewLabelWithStyle("Пользователь:", fyne.TextAlignLeading, fyne.TextStyle{}),
+				widget.NewLabel(""),
+				widget.NewLabelWithStyle("Компьютер:", fyne.TextAlignLeading, fyne.TextStyle{}),
+				widget.NewLabel(""),
+				widget.NewLabelWithStyle("Статус:", fyne.TextAlignLeading, fyne.TextStyle{}),
+				widget.NewLabel(""),
+				widget.NewLabelWithStyle("Кабинет:", fyne.TextAlignLeading, fyne.TextStyle{}),
+				widget.NewLabel(""),
+				widget.NewLabelWithStyle("Создан:", fyne.TextAlignLeading, fyne.TextStyle{}),
+				widget.NewLabel(""),
+				widget.NewLabelWithStyle("Обновлен:", fyne.TextAlignLeading, fyne.TextStyle{}),
+				widget.NewLabel(""),
 			)
 
 			content := container.NewVBox(
-				titleLabel,
-				descLabel,
+				container.NewPadded(titleLabel),
+				container.NewPadded(descLabel),
 				container.NewPadded(metaContainer),
 			)
 
@@ -237,10 +246,10 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 			card.FillColor = getStatusColor(tab.ticketsCache[i].StatusName)
 
 			contentContainer := stack.Objects[1].(*fyne.Container).Objects[0].(*fyne.Container)
-			titleLabel := contentContainer.Objects[0].(*widget.Label)
+			titleLabel := contentContainer.Objects[0].(*fyne.Container).Objects[0].(*widget.Label)
 			titleLabel.SetText(tab.ticketsCache[i].Title)
 
-			descLabel := contentContainer.Objects[1].(*widget.Label)
+			descLabel := contentContainer.Objects[1].(*fyne.Container).Objects[0].(*widget.Label)
 			descLabel.SetText(tab.ticketsCache[i].Description)
 
 			metaContainer := contentContainer.Objects[2].(*fyne.Container).Objects[0].(*fyne.Container)
@@ -278,12 +287,36 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 
 	tab.ticketsList = ticketsList
 
+	statusSelect := widget.NewSelect(statuses, nil)
+	statusSelect.PlaceHolder = "Выберите статус"
+	tab.statusSelect = statusSelect
+
+	updateStatusBtn := widget.NewButtonWithIcon("Обновить статус", theme.ViewRefreshIcon(), func() {
+		if selectedTicketID == -1 {
+			showCustomDialog(tab, "Ошибка", "Выберите тикет для изменения статуса", theme.WarningIcon())
+			return
+		}
+
+		if statusSelect.Selected == "" {
+			showCustomDialog(tab, "Ошибка", "Выберите новый статус", theme.WarningIcon())
+			return
+		}
+
+		statusID := statusValues[statusSelect.Selected]
+		if err := updateTicketStatus(tab, selectedTicketID, statusID); err != nil {
+			showCustomDialog(tab, "Ошибка", "Не удалось обновить статус: "+err.Error(), theme.ErrorIcon())
+			return
+		}
+
+		showCustomDialog(tab, "Успех", "Статус тикета успешно обновлен", theme.ConfirmIcon())
+		tab.refreshChan <- struct{}{}
+	})
+
 	ticketsList.OnSelected = func(id widget.ListItemID) {
 		tab.mutex.RLock()
 		defer tab.mutex.RUnlock()
 
 		if id == lastSelectedID {
-			// Снимаем выделение при повторном клике
 			selectedTicketID = -1
 			lastSelectedID = -1
 			ticketsList.UnselectAll()
@@ -293,6 +326,7 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 			userID.SetText("")
 			computerName.SetText("")
 			cabinet.SetText("")
+			statusSelect.SetSelected("")
 			return
 		}
 
@@ -305,6 +339,7 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 			userID.SetText(tab.ticketsCache[id].UserID)
 			computerName.SetText(tab.ticketsCache[id].ComputerName)
 			cabinet.SetText(fmt.Sprintf("%d", tab.ticketsCache[id].Cabinet))
+			statusSelect.SetSelected(tab.ticketsCache[id].StatusName)
 		}
 		ticketsList.Refresh()
 	}
@@ -318,7 +353,7 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 			return
 		}
 
-		tickets, err := tab.getTickets()
+		tickets, err := getTickets(tab)
 		if err != nil {
 			log.Printf("Ошибка получения тикетов: %v", err)
 			return
@@ -332,25 +367,26 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 		ticketsList.Refresh()
 	}
 
-	clearBtn := widget.NewButtonWithIcon("Очистить", theme.DeleteIcon(), func() {
+	clearBtn := widget.NewButtonWithIcon("Убрать выделение с тикета", theme.DeleteIcon(), func() {
 		selectedTicketID = -1
 		lastSelectedID = -1
+		ticketsList.UnselectAll()
 		ticketTitle.SetText("")
 		ticketDesc.SetText("")
 		userID.SetText("")
 		computerName.SetText("")
 		cabinet.SetText("")
-		ticketsList.UnselectAll()
+		statusSelect.SetSelected("")
 	})
 
 	createBtn := widget.NewButtonWithIcon("Создать", theme.ContentAddIcon(), func() {
 		if err := ticketTitle.Validate(); err != nil {
-			tab.showCustomDialog("Ошибка", err.Error(), theme.WarningIcon())
+			showCustomDialog(tab, "Ошибка", err.Error(), theme.WarningIcon())
 			return
 		}
 
 		if err := cabinet.Validator(cabinet.Text); err != nil {
-			tab.showCustomDialog("Ошибка", err.Error(), theme.WarningIcon())
+			showCustomDialog(tab, "Ошибка", err.Error(), theme.WarningIcon())
 			return
 		}
 
@@ -371,8 +407,8 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 			UpdatedAt:    nil,
 		}
 
-		if err := tab.addTicket(ticket); err != nil {
-			tab.showCustomDialog("Ошибка", "Не удалось создать тикет: "+err.Error(), theme.ErrorIcon())
+		if err := addTicket(tab, ticket); err != nil {
+			showCustomDialog(tab, "Ошибка", "Не удалось создать тикет: "+err.Error(), theme.ErrorIcon())
 			return
 		}
 
@@ -381,14 +417,13 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 		userID.SetText("")
 		computerName.SetText("")
 		cabinet.SetText("")
-
-		tab.showCustomDialog("Успех", "Тикет успешно создан", theme.ConfirmIcon())
+		showCustomDialog(tab, "Успех", "Тикет успешно создан", theme.ConfirmIcon())
 		tab.refreshChan <- struct{}{}
 	})
 
 	updateBtn := widget.NewButtonWithIcon("Обновить", theme.ViewRefreshIcon(), func() {
 		if selectedTicketID == -1 {
-			tab.showCustomDialog("Ошибка", "Выберите тикет для обновления", theme.WarningIcon())
+			showCustomDialog(tab, "Ошибка", "Выберите тикет для обновления", theme.WarningIcon())
 			return
 		}
 
@@ -406,18 +441,18 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 			Cabinet:      cabinetValue,
 		}
 
-		if err := tab.updateTicket(ticket); err != nil {
-			tab.showCustomDialog("Ошибка", "Не удалось обновить тикет: "+err.Error(), theme.ErrorIcon())
+		if err := updateTicket(tab, ticket); err != nil {
+			showCustomDialog(tab, "Ошибка", "Не удалось обновить тикет: "+err.Error(), theme.ErrorIcon())
 			return
 		}
 
-		tab.showCustomDialog("Успех", "Тикет успешно обновлен", theme.ConfirmIcon())
+		showCustomDialog(tab, "Успех", "Тикет успешно обновлен", theme.ConfirmIcon())
 		tab.refreshChan <- struct{}{}
 	})
 
 	deleteBtn := widget.NewButtonWithIcon("Удалить", theme.DeleteIcon(), func() {
 		if selectedTicketID == -1 {
-			tab.showCustomDialog("Ошибка", "Выберите тикет для удаления", theme.WarningIcon())
+			showCustomDialog(tab, "Ошибка", "Выберите тикет для удаления", theme.WarningIcon())
 			return
 		}
 
@@ -431,19 +466,20 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 		}
 		tab.mutex.RUnlock()
 
-		tab.showCustomConfirmDialog(
+		showCustomConfirmDialog(
+			tab,
 			"Подтверждение удаления",
 			fmt.Sprintf("Вы уверены, что хотите удалить тикет '%s'?\nЭто действие нельзя отменить.", ticketTitle),
 			theme.WarningIcon(),
 			func(ok bool) {
 				if ok {
-					if err := tab.deleteTicket(selectedTicketID); err != nil {
-						tab.showCustomDialog("Ошибка", "Не удалось удалить тикет: "+err.Error(), theme.ErrorIcon())
+					if err := deleteTicket(tab, selectedTicketID); err != nil {
+						showCustomDialog(tab, "Ошибка", "Не удалось удалить тикет: "+err.Error(), theme.ErrorIcon())
 						return
 					}
 					selectedTicketID = -1
 					lastSelectedID = -1
-					tab.showCustomDialog("Успех", "Тикет успешно удален", theme.ConfirmIcon())
+					showCustomDialog(tab, "Успех", "Тикет успешно удален", theme.ConfirmIcon())
 					tab.refreshChan <- struct{}{}
 				}
 			},
@@ -470,8 +506,19 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 	})
 	sortSelect.SetSelected("Дата создания")
 
-	sortDirectionBtn := widget.NewButtonWithIcon("", theme.MediaReplayIcon(), func() {
+	// Сначала объявляем переменную
+	var sortDirectionBtn *widget.Button
+
+	// Затем создаем кнопку
+	sortDirectionBtn = widget.NewButton("По возрастанию", func() {
 		tab.sortDescending = !tab.sortDescending
+
+		if tab.sortDescending {
+			sortDirectionBtn.SetText("По убыванию")
+		} else {
+			sortDirectionBtn.SetText("По возрастанию")
+		}
+
 		tab.refreshChan <- struct{}{}
 	})
 
@@ -515,6 +562,35 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 		),
 	)
 
+	statusForm := container.NewVBox(
+		widget.NewLabelWithStyle("Изменить статус тикета", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		container.NewBorder(
+			nil,
+			container.NewHBox(
+				widget.NewLabel(""),
+				updateStatusBtn,
+				widget.NewLabel(""),
+			),
+			nil,
+			nil,
+			statusSelect,
+		),
+	)
+
+	leftPanel := container.NewVBox(
+		form,
+		widget.NewSeparator(),
+		statusForm,
+	)
+
+	split := container.NewHSplit(
+		container.NewPadded(leftPanel),
+		container.NewPadded(ticketsList),
+	)
+	tab.split = split
+
+	split.SetOffset(0.4)
+
 	tab.content = container.NewBorder(
 		container.NewVBox(
 			container.NewCenter(title),
@@ -527,10 +603,7 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 		),
 		nil,
 		nil,
-		container.NewHSplit(
-			container.NewPadded(form),
-			container.NewPadded(ticketsList),
-		),
+		split,
 	)
 
 	cleanup := func() {
@@ -555,12 +628,12 @@ func CreateTicketsTab(window fyne.Window) (fyne.CanvasObject, func()) {
 	return tab.content, cleanup
 }
 
-func (t *TicketsTab) getTickets() ([]Ticket, error) {
+func getTickets(tab *TicketsTab) ([]Ticket, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	sortDirection := "DESC"
-	if !t.sortDescending {
+	if !tab.sortDescending {
 		sortDirection = "ASC"
 	}
 
@@ -570,9 +643,9 @@ func (t *TicketsTab) getTickets() ([]Ticket, error) {
 		       t.created_at, t.update_at
 		FROM tickets t
 		JOIN tickets_statuses ts ON t.status_id = ts.id
-		ORDER BY %s %s`, t.sortField, sortDirection)
+		ORDER BY %s %s`, tab.sortField, sortDirection)
 
-	rows, err := t.dbt.QueryContext(ctx, query)
+	rows, err := tab.dbt.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -614,7 +687,7 @@ func (t *TicketsTab) getTickets() ([]Ticket, error) {
 	return tickets, nil
 }
 
-func (t *TicketsTab) addTicket(ticket Ticket) error {
+func addTicket(tab *TicketsTab, ticket Ticket) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -622,7 +695,7 @@ func (t *TicketsTab) addTicket(ticket Ticket) error {
 		INSERT INTO tickets 
 		(title, description, user_id, computer_name, status_id, cabinet, created_at) 
 		VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	_, err := t.dbt.ExecContext(ctx, query,
+	_, err := tab.dbt.ExecContext(ctx, query,
 		ticket.Title,
 		ticket.Description,
 		ticket.UserID,
@@ -633,7 +706,7 @@ func (t *TicketsTab) addTicket(ticket Ticket) error {
 	return err
 }
 
-func (t *TicketsTab) updateTicket(ticket Ticket) error {
+func updateTicket(tab *TicketsTab, ticket Ticket) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
@@ -643,7 +716,7 @@ func (t *TicketsTab) updateTicket(ticket Ticket) error {
 		SET title = $1, description = $2, user_id = $3, 
 		    computer_name = $4, cabinet = $5, update_at = $6 
 		WHERE id = $7`
-	_, err := t.dbt.ExecContext(ctx, query,
+	_, err := tab.dbt.ExecContext(ctx, query,
 		ticket.Title,
 		ticket.Description,
 		ticket.UserID,
@@ -654,11 +727,27 @@ func (t *TicketsTab) updateTicket(ticket Ticket) error {
 	return err
 }
 
-func (t *TicketsTab) deleteTicket(id int) error {
+func updateTicketStatus(tab *TicketsTab, ticketID, statusID int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	query := `
+		UPDATE tickets 
+		SET status_id = $1, update_at = $2 
+		WHERE id = $3`
+	_, err := tab.dbt.ExecContext(ctx, query,
+		statusID,
+		now,
+		ticketID)
+	return err
+}
+
+func deleteTicket(tab *TicketsTab, id int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	query := `DELETE FROM tickets WHERE id = $1`
-	_, err := t.dbt.ExecContext(ctx, query, id)
+	_, err := tab.dbt.ExecContext(ctx, query, id)
 	return err
 }
