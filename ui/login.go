@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"FYNEAPPS/resources"
 	"fmt"
 
 	"fyne.io/fyne/v2"
@@ -104,21 +105,23 @@ func ShowSuccessDialog(message string, parent fyne.Window) {
 
 // CreateLoginWindow создает окно входа в систему
 func CreateLoginWindow(app fyne.App, onLogin func(string, string) bool) fyne.Window {
-	loginWindow := app.NewWindow("Вход в систему")
+	loginWindow := app.NewWindow("ПГАТУ инфраструктура")
 	loginWindow.SetFixedSize(true)
 	loginWindow.Resize(fyne.NewSize(400, 300))
 	loginWindow.CenterOnScreen()
+	loginWindow.SetIcon(resources.ResourcePgatulogosmallPng)
 
 	// Основные элементы интерфейса
 	title := widget.NewLabel("ПГАТУ Инфраструктура")
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.Alignment = fyne.TextAlignCenter
 
-	logo := widget.NewIcon(theme.ComputerIcon())
-	logo.Resize(fyne.NewSize(64, 64))
+	logo := widget.NewIcon(resources.ResourcePgatulogosmallPng)
+	logo.Resize(fyne.NewSize(512, 512))
 
 	username := widget.NewEntry()
 	username.SetPlaceHolder("Логин")
+	username.SetText("user") // Предзаполняем логин
 	username.Validator = func(s string) error {
 		if len(s) == 0 {
 			return fmt.Errorf("Введите логин")
@@ -128,6 +131,7 @@ func CreateLoginWindow(app fyne.App, onLogin func(string, string) bool) fyne.Win
 
 	password := widget.NewPasswordEntry()
 	password.SetPlaceHolder("Пароль")
+	password.SetText("user") // Предзаполняем пароль
 	password.Validator = func(s string) error {
 		if len(s) == 0 {
 			return fmt.Errorf("Введите пароль")

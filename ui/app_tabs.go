@@ -5,6 +5,7 @@ import (
 	"FYNEAPPS/resources"
 	settings "FYNEAPPS/ui/setting_tab"
 	"FYNEAPPS/ui/tabs"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,11 +14,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -158,7 +161,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 		widget.NewSeparator(),
 		container.NewCenter(
-			widget.NewLabel("v0.0.14 alpha"),
+			widget.NewLabel("v0.0.15 alpha"),
 		),
 	)
 
@@ -277,10 +280,9 @@ func cleanupApp() {
 	// ... другие cleanup-функции ...
 }
 
-// updateApp проверяет и устанавливает обновления
 func updateApp(window fyne.Window) {
 	progress := widget.NewProgressBarInfinite()
-	statusLabel := widget.NewLabel("Проверка обновлений...")
+	statusLabel := widget.NewLabel(settings.GetLocalizedString("CheckingUpdates"))
 
 	dialog := widget.NewModalPopUp(
 		container.NewVBox(
@@ -294,27 +296,38 @@ func updateApp(window fyne.Window) {
 	go func() {
 		defer dialog.Hide()
 
-		// 1. Проверка текущей версии (замените на свою логику)
-		currentVersion := "0.0.14" // Это должно быть из вашего приложения
+		// 1. Получаем текущую версию приложения
+		currentVersion := "0.0.15"
 
-		// 2. Получение информации о последнем релизе
-		statusLabel.SetText("Получение информации о релизе...")
-		release, err := getLatestRelease("yourusername", "yourrepository")
+		// 2. Получаем информацию о последнем релизе
+		statusLabel.SetText(settings.GetLocalizedString("FetchingReleaseInfo"))
+		release, err := getLatestRelease("RGrigorii00", "FYNEAPPS")
 		if err != nil {
-			fyne.LogError("Ошибка получения релиза", err)
-			// widget.ShowError(fmt.Errorf("не удалось проверить обновления: %v", err), window)
+			fmt.Print("Ошибка получения релиза", err)
+			dialog.Hide()
+			showErrorDialog(window, fmt.Sprintf("%s: %v", settings.GetLocalizedString("UpdateError"), err))
 			return
 		}
 
-		// 3. Проверка необходимости обновления
-		if release.TagName == currentVersion {
-			// widget.ShowInformation("Обновление", "У вас уже установлена последняя версия", window)
+		// 3. Проверяем, нужно ли обновление
+		if release.TagName == "v"+currentVersion {
+			dialog.Hide()
+			showInfoDialog(window,
+				settings.GetLocalizedString("NoUpdateTitle"),
+				fmt.Sprintf("%s\n\n%s: v%s\n%s: v%s",
+					settings.GetLocalizedString("NoUpdateMessage"),
+					settings.GetLocalizedString("CurrentVersion"),
+					currentVersion,
+					settings.GetLocalizedString("LatestVersion"),
+					strings.TrimPrefix(release.TagName, "v"),
+				))
 			return
 		}
 
-		// 4. Поиск подходящего билда для текущей ОС
-		statusLabel.SetText("Поиск подходящего билда...")
+		// 4. Ищем подходящий билд для текущей ОС
+		statusLabel.SetText(settings.GetLocalizedString("FindingBuild"))
 		assetURL := ""
+		assetName := ""
 		osPattern := ""
 
 		switch runtime.GOOS {
@@ -327,63 +340,325 @@ func updateApp(window fyne.Window) {
 		}
 
 		for _, asset := range release.Assets {
-			if contains(asset.Name, osPattern) {
+			if strings.Contains(strings.ToLower(asset.Name), osPattern) {
 				assetURL = asset.URL
+				assetName = asset.Name
 				break
 			}
 		}
 
 		if assetURL == "" {
-			// widget.ShowError(fmt.Errorf("не найден подходящий билд для вашей ОС"), window)
+			dialog.Hide()
+			showErrorDialog(window, fmt.Sprintf("%s\n\n%s: %s",
+				settings.GetLocalizedString("NoBuildError"),
+				settings.GetLocalizedString("YourOS"),
+				runtime.GOOS))
 			return
 		}
 
-		// 5. Скачивание нового билда
-		statusLabel.SetText("Скачивание обновления...")
+		// 5. Скачиваем новый билд
+		statusLabel.SetText(settings.GetLocalizedString("DownloadingUpdate"))
 		exePath, err := os.Executable()
 		if err != nil {
-			fyne.LogError("Ошибка получения пути", err)
-			// widget.ShowError(fmt.Errorf("ошибка получения пути: %v", err), window)
+			dialog.Hide()
+			showErrorDialog(window, fmt.Sprintf("%s\n\n%s: %v",
+				settings.GetLocalizedString("ExePathError"),
+				settings.GetLocalizedString("Details"),
+				err))
 			return
 		}
 
-		downloadPath := filepath.Join(filepath.Dir(exePath), "update_temp")
+		appDir := filepath.Dir(exePath)
+		downloadPath := filepath.Join(appDir, assetName)
+
+		// Скачиваем файл
 		err = downloadFile(downloadPath, assetURL)
 		if err != nil {
-			fyne.LogError("Ошибка загрузки", err)
-			// widget.ShowError(fmt.Errorf("ошибка загрузки: %v", err), window)
+			dialog.Hide()
+			showErrorDialog(window, fmt.Sprintf("%s\n\n%s: %v",
+				settings.GetLocalizedString("DownloadError"),
+				settings.GetLocalizedString("Details"),
+				err))
+			// Удаляем частично загруженный файл, если он существует
+			if _, e := os.Stat(downloadPath); e == nil {
+				os.Remove(downloadPath)
+			}
 			return
 		}
 
-		// 6. Установка обновления (это сложная часть)
-		statusLabel.SetText("Установка обновления...")
-		// Здесь должна быть логика замены текущего исполняемого файла
-		// Это зависит от ОС и может потребовать дополнительных скриптов
+		// 6. Подготовка к обновлению
+		statusLabel.SetText(settings.GetLocalizedString("CleaningUp"))
 
-		// Временное сообщение об успехе
-		// widget.ShowInformation("Обновление",
-		// 	fmt.Sprintf("Обновление до версии %s успешно загружено. Перезапустите приложение.", release.TagName),
-		// 	window)
+		// Удаляем файл сессии
+		sessionFile := filepath.Join(appDir, "session.json")
+		if _, err := os.Stat(sessionFile); err == nil {
+			if err := os.Remove(sessionFile); err != nil {
+				fmt.Print("Ошибка удаления файла сессии", err)
+			}
+		}
+
+		// Удаляем сессию из базы данных
+		if sessionID := getCurrentSessionID(); sessionID != "" {
+			if err := deleteCurrentSession(sessionID); err != nil {
+				fmt.Print("Ошибка удаления сессии из БД", err)
+			}
+		}
+
+		// 7. Устанавливаем обновление
+		statusLabel.SetText(settings.GetLocalizedString("InstallingUpdate"))
+
+		var installErr error
+		if runtime.GOOS == "windows" {
+			fmt.Print("Начато обновление (Windows)...")
+			installErr = applyWindowsUpdate(exePath, downloadPath)
+		} else {
+			fmt.Print("Начато обновление (Unix)...")
+			installErr = applyUnixUpdate(exePath, downloadPath)
+		}
+
+		if installErr != nil {
+			dialog.Hide()
+			showErrorDialog(window, fmt.Sprintf("%s\n\n%s: %v",
+				settings.GetLocalizedString("InstallError"),
+				settings.GetLocalizedString("Details"),
+				installErr))
+			// Удаляем загруженный файл обновления
+			if _, e := os.Stat(downloadPath); e == nil {
+				os.Remove(downloadPath)
+			}
+			return
+		}
+
+		// 8. Перезапускаем приложение
+		restartApplication(exePath)
 	}()
+}
+
+func applyWindowsUpdate(exePath, updatePath string) error {
+	if runtime.GOOS == "windows" {
+		// Получаем абсолютные пути
+		exePath, _ = filepath.Abs(exePath)
+		updatePath, _ = filepath.Abs(updatePath)
+
+		// 1. Находим cmd.exe по абсолютному пути
+		systemRoot := os.Getenv("SystemRoot")
+		if systemRoot == "" {
+			systemRoot = "C:\\Windows"
+		}
+		// cmdPath := filepath.Join(systemRoot, "System32", "cmd.exe")
+
+		// 2. Создаем bat-файл с логикой обновления
+		batContent := fmt.Sprintf(`@echo off
+:: Административные права (если нужно)
+:: if not "%1"=="admin" (powershell start -verb runas '%0' admin & exit /b)
+
+:: Основной код обновления
+echo [UPDATE] Завершаем текущий процесс...
+taskkill /F /IM "%s" >nul 2>&1
+ping -n 3 127.0.0.1 >nul
+
+echo [UPDATE] Удаляем старую версию...
+if exist "%s" (
+    del /F /Q "%s" >nul 2>&1
+    if exist "%s" (
+        echo [ERROR] Не удалось удалить файл
+        pause
+        exit /B 1
+    )
+)
+
+echo [UPDATE] Устанавливаем новую версию...
+move /Y "%s" "%s" >nul 2>&1
+if not exist "%s" (
+    echo [ERROR] Не удалось переместить файл
+    pause
+    exit /B 2
+)
+
+echo [UPDATE] Запускаем обновленную версию...
+start "" "%s"
+exit /B 0
+`, filepath.Base(exePath), exePath, exePath, exePath, updatePath, exePath, exePath, exePath)
+
+		// 3. Сохраняем bat-файл рядом с exe
+		batPath := filepath.Join(filepath.Dir(exePath), "update_"+filepath.Base(exePath)+".bat")
+		if err := os.WriteFile(batPath, []byte(batContent), 0644); err != nil {
+			return fmt.Errorf("ошибка создания bat-файла: %w", err)
+		}
+
+		// 4. Запускаем через абсолютный путь к cmd.exe
+		// if err := runCommandHidden(cmdPath, "/C", batPath); err != nil {
+		// 	return fmt.Errorf("ошибка запуска обновления: %w", err)
+		// }
+
+		// 5. Немедленно завершаем текущее приложение
+		os.Exit(0)
+	}
+	return nil
+}
+
+// // runCommandHidden запускает команду без отображения окна (только для Windows)
+// func runCommandHidden(path string, args ...string) error {
+// 	switch runtime.GOOS {
+// 	case "windows":
+
+// 		cmd := exec.Command(path, args...)
+// 		cmd.SysProcAttr = &windows.SysProcAttr{
+// 			HideWindow: true,
+// 		}
+// 		return cmd.Start()
+// 	case "linux":
+// 		// Просто запускаем команду без скрытия окна
+// 		return exec.Command(path, args...).Start()
+// 	default:
+
+// 		// Просто запускаем команду без скрытия окна
+// 		return exec.Command(path, args...).Start()
+// 	}
+// 	return nil
+// }
+
+func applyUnixUpdate(exePath, updatePath string) error {
+	// Устанавливаем права на новый файл
+	if err := os.Chmod(updatePath, 0755); err != nil {
+		return fmt.Errorf("ошибка установки прав: %w", err)
+	}
+
+	// Заменяем файл
+	if err := os.Rename(updatePath, exePath); err != nil {
+		return fmt.Errorf("ошибка замены файла: %w", err)
+	}
+
+	return nil
+}
+
+func restartApplication(exePath string) {
+	var cmd *exec.Cmd
+
+	if runtime.GOOS == "windows" {
+		// Реализация для Windows
+		cmd = exec.Command("cmd.exe", "/C", "start", "/B", `""`, exePath)
+	} else {
+		// Реализация для Linux и других Unix-систем
+		cmd = exec.Command(exePath)
+	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Start(); err != nil {
+		fmt.Print("Ошибка перезапуска приложения", err)
+		return
+	}
+
+	// Даем процессу немного времени на запуск
+	time.Sleep(500 * time.Millisecond)
+
+	// Завершаем текущий процесс
+	os.Exit(0)
+}
+
+// SessionData представляет структуру данных сессии
+type SessionData struct {
+	SessionID string    `json:"session_id"`
+	ExpiresAt time.Time `json:"expires_at"`
+	// Другие поля сессии, если они есть
+}
+
+func getCurrentSessionID() string {
+	// Получаем путь к директории с исполняемым файлом
+	exePath, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	appDir := filepath.Dir(exePath)
+
+	// Формируем путь к файлу session.json
+	sessionFile := filepath.Join(appDir, "session.json")
+
+	// Читаем файл
+	data, err := os.ReadFile(sessionFile)
+	if err != nil {
+		return ""
+	}
+
+	// Парсим JSON
+	var session SessionData
+	if err := json.Unmarshal(data, &session); err != nil {
+		return ""
+	}
+
+	return session.SessionID
+}
+
+func deleteCurrentSession(sessionID string) error {
+	connStr := "user=user dbname=grafana_db password=user host=83.166.245.249 port=5432 sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return fmt.Errorf("ошибка подключения: %w", err)
+	}
+	defer db.Close()
+
+	if err = db.Ping(); err != nil {
+		return fmt.Errorf("ошибка проверки соединения: %w", err)
+	}
+
+	_, err = db.Exec("DELETE FROM user_sessions WHERE session_id = $1", sessionID)
+	if err != nil {
+		return fmt.Errorf("ошибка удаления сессии: %w", err)
+	}
+
+	return nil
+}
+
+// Вспомогательные функции для отображения диалогов
+func showErrorDialog(window fyne.Window, message string) {
+	dialog := dialog.NewError(
+		fmt.Errorf("ошибка обновления: %s", message),
+		window,
+	)
+	dialog.Show()
+}
+
+func showInfoDialog(window fyne.Window, title, message string) {
+	dialog := dialog.NewInformation(
+		title,
+		message,
+		window,
+	)
+	dialog.Show()
 }
 
 // getLatestRelease получает информацию о последнем релизе
 func getLatestRelease(owner, repo string) (*GitHubRelease, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
-	resp, err := http.Get(url)
+
+	// Создаем HTTP-клиент с таймаутом
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ошибка создания запроса: %w", err)
+	}
+
+	// Добавляем заголовки для GitHub API
+	req.Header.Add("Accept", "application/vnd.github.v3+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка HTTP-запроса: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ошибка HTTP: %s", resp.Status)
+		return nil, fmt.Errorf("неожиданный статус код: %d", resp.StatusCode)
 	}
 
 	var release GitHubRelease
-	err = json.NewDecoder(resp.Body).Decode(&release)
-	if err != nil {
-		return nil, err
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, fmt.Errorf("ошибка декодирования JSON: %w", err)
 	}
 
 	return &release, nil
@@ -431,6 +706,6 @@ func openBrowser(url string) {
 
 	err := exec.Command(cmd, args...).Start()
 	if err != nil {
-		fyne.LogError("Ошибка при открытии браузера", err)
+		fmt.Print("Ошибка при открытии браузера", err)
 	}
 }
