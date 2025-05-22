@@ -103,25 +103,30 @@ func ShowSuccessDialog(message string, parent fyne.Window) {
 	d.Show()
 }
 
-// CreateLoginWindow создает окно входа в систему
 func CreateLoginWindow(app fyne.App, onLogin func(string, string) bool) fyne.Window {
 	loginWindow := app.NewWindow("ПГАТУ инфраструктура")
 	loginWindow.SetFixedSize(true)
-	loginWindow.Resize(fyne.NewSize(400, 300))
+	loginWindow.Resize(fyne.NewSize(400, 400))
 	loginWindow.CenterOnScreen()
 	loginWindow.SetIcon(resources.ResourcePgatulogosmallPng)
 
-	// Основные элементы интерфейса
+	// Обработчик закрытия окна (крестик)
+	loginWindow.SetCloseIntercept(func() {
+		loginWindow.Hide() // Скрываем окно вместо закрытия
+	})
+
+	// Остальной код создания интерфейса остается без изменений
 	title := widget.NewLabel("ПГАТУ Инфраструктура")
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.Alignment = fyne.TextAlignCenter
 
-	logo := widget.NewIcon(resources.ResourcePgatulogosmallPng)
-	logo.Resize(fyne.NewSize(512, 512))
+	logo := canvas.NewImageFromResource(resources.ResourcePgatulogosmallPng)
+	logo.FillMode = canvas.ImageFillContain
+	logo.SetMinSize(fyne.NewSize(150, 150))
 
 	username := widget.NewEntry()
 	username.SetPlaceHolder("Логин")
-	username.SetText("user") // Предзаполняем логин
+	username.SetText("user")
 	username.Validator = func(s string) error {
 		if len(s) == 0 {
 			return fmt.Errorf("Введите логин")
@@ -131,7 +136,7 @@ func CreateLoginWindow(app fyne.App, onLogin func(string, string) bool) fyne.Win
 
 	password := widget.NewPasswordEntry()
 	password.SetPlaceHolder("Пароль")
-	password.SetText("user") // Предзаполняем пароль
+	password.SetText("user")
 	password.Validator = func(s string) error {
 		if len(s) == 0 {
 			return fmt.Errorf("Введите пароль")
@@ -140,19 +145,14 @@ func CreateLoginWindow(app fyne.App, onLogin func(string, string) bool) fyne.Win
 	}
 
 	loginButton := widget.NewButton("Войти", func() {
-		// Валидация логина
 		if err := username.Validate(); err != nil {
 			ShowErrorDialog(err.Error(), loginWindow)
 			return
 		}
-
-		// Валидация пароля
 		if err := password.Validate(); err != nil {
 			ShowErrorDialog(err.Error(), loginWindow)
 			return
 		}
-
-		// Проверка учетных данных
 		if onLogin(username.Text, password.Text) {
 			ShowSuccessDialog("Успешный вход в систему", loginWindow)
 			loginWindow.Hide()
@@ -161,31 +161,36 @@ func CreateLoginWindow(app fyne.App, onLogin func(string, string) bool) fyne.Win
 		}
 	})
 
+	// Кнопка Отмена с перезапуском окна
 	cancelButton := widget.NewButton("Отмена", func() {
 		loginWindow.Close()
+		newLoginWindow := CreateLoginWindow(app, onLogin)
+		newLoginWindow.Show()
 	})
 
 	form := container.NewVBox(
 		container.NewPadded(username),
 		container.NewPadded(password),
-		container.NewHBox(
-			layout.NewSpacer(),
-			container.NewPadded(cancelButton),
-			container.NewPadded(loginButton),
-			layout.NewSpacer(),
-		),
 	)
 
-	// Компоновка интерфейса
+	buttons := container.NewHBox(
+		layout.NewSpacer(),
+		cancelButton,
+		loginButton,
+		layout.NewSpacer(),
+	)
+
 	content := container.NewVBox(
 		container.NewCenter(logo),
 		container.NewCenter(title),
 		layout.NewSpacer(),
 		form,
 		layout.NewSpacer(),
-		container.NewCenter(widget.NewLabel("© ПГАТУ")),
+		buttons,
+		layout.NewSpacer(),
+		container.NewCenter(widget.NewLabel("ПГАТУ Инфраструктура v.0.0.16")),
 	)
 
-	loginWindow.SetContent(content)
+	loginWindow.SetContent(container.NewPadded(content))
 	return loginWindow
 }

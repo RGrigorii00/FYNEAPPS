@@ -54,7 +54,6 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		{"Мой хост", "83.166.245.249", "Checking...", "N/A", "N/A", "N/A", ""},
 	}
 
-	// Создаем контекст с отменой
 	ctx, cancel := context.WithCancel(context.Background())
 
 	tab := &ServerStatusTab{
@@ -67,7 +66,6 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 
 	columnWidths := []float32{200, 120, 100, 80, 80, 150, 120}
 
-	// Создаем заголовки таблицы
 	headerRow := container.NewHBox()
 	headers := []string{"Имя сервера", "Адрес", "Статус", "Ping", "HTTP", "Trace", "Обновлено"}
 
@@ -78,7 +76,6 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		headerRow.Add(container.NewHBox(widget.NewLabel("  "), label))
 	}
 
-	// Создаем таблицу
 	tab.serverTable = widget.NewTable(
 		func() (int, int) { return len(tab.filteredServers), len(columnWidths) },
 		func() fyne.CanvasObject {
@@ -124,7 +121,6 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		tab.serverTable.SetColumnWidth(i, width)
 	}
 
-	// Элементы управления
 	tab.searchEntry = widget.NewEntry()
 	tab.searchEntry.SetPlaceHolder("Поиск по имени или адресу...")
 
@@ -134,54 +130,56 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 	tab.sortSelect = widget.NewSelect([]string{"Имя", "Статус", "Ping", "HTTP", "Trace", "Обновлено"}, nil)
 	tab.sortSelect.SetSelected("Имя")
 
-	// Функция фильтрации серверов
 	filterServers := func(search string) {
-		if search == "" {
-			tab.filteredServers = make([]ServerInfo, len(tab.servers))
-			copy(tab.filteredServers, tab.servers)
-			return
-		}
-
-		tab.filteredServers = []ServerInfo{}
-		for _, s := range tab.servers {
-			if strings.Contains(strings.ToLower(s.Name), strings.ToLower(search)) ||
-				strings.Contains(strings.ToLower(s.Host), strings.ToLower(search)) {
-				tab.filteredServers = append(tab.filteredServers, s)
+		fyne.Do(func() {
+			if search == "" {
+				tab.filteredServers = make([]ServerInfo, len(tab.servers))
+				copy(tab.filteredServers, tab.servers)
+				return
 			}
-		}
+
+			var filtered []ServerInfo
+			for _, s := range tab.servers {
+				if strings.Contains(strings.ToLower(s.Name), strings.ToLower(search)) ||
+					strings.Contains(strings.ToLower(s.Host), strings.ToLower(search)) {
+					filtered = append(filtered, s)
+				}
+			}
+			tab.filteredServers = filtered
+		})
 	}
 
-	// Функция сортировки серверов
 	sortServers := func(sortBy string) {
-		switch sortBy {
-		case "Имя":
-			sort.Slice(tab.filteredServers, func(i, j int) bool {
-				return tab.filteredServers[i].Name < tab.filteredServers[j].Name
-			})
-		case "Статус":
-			sort.Slice(tab.filteredServers, func(i, j int) bool {
-				return tab.filteredServers[i].Status < tab.filteredServers[j].Status
-			})
-		case "Ping":
-			sort.Slice(tab.filteredServers, func(i, j int) bool {
-				return extractNumericValue(tab.filteredServers[i].Ping) < extractNumericValue(tab.filteredServers[j].Ping)
-			})
-		case "HTTP":
-			sort.Slice(tab.filteredServers, func(i, j int) bool {
-				return extractNumericValue(tab.filteredServers[i].HTTP) < extractNumericValue(tab.filteredServers[j].HTTP)
-			})
-		case "Trace":
-			sort.Slice(tab.filteredServers, func(i, j int) bool {
-				return extractNumericValue(tab.filteredServers[i].Trace) < extractNumericValue(tab.filteredServers[j].Trace)
-			})
-		case "Обновлено":
-			sort.Slice(tab.filteredServers, func(i, j int) bool {
-				return tab.filteredServers[i].Updated > tab.filteredServers[j].Updated
-			})
-		}
+		fyne.Do(func() {
+			switch sortBy {
+			case "Имя":
+				sort.Slice(tab.filteredServers, func(i, j int) bool {
+					return tab.filteredServers[i].Name < tab.filteredServers[j].Name
+				})
+			case "Статус":
+				sort.Slice(tab.filteredServers, func(i, j int) bool {
+					return tab.filteredServers[i].Status < tab.filteredServers[j].Status
+				})
+			case "Ping":
+				sort.Slice(tab.filteredServers, func(i, j int) bool {
+					return extractNumericValue(tab.filteredServers[i].Ping) < extractNumericValue(tab.filteredServers[j].Ping)
+				})
+			case "HTTP":
+				sort.Slice(tab.filteredServers, func(i, j int) bool {
+					return extractNumericValue(tab.filteredServers[i].HTTP) < extractNumericValue(tab.filteredServers[j].HTTP)
+				})
+			case "Trace":
+				sort.Slice(tab.filteredServers, func(i, j int) bool {
+					return extractNumericValue(tab.filteredServers[i].Trace) < extractNumericValue(tab.filteredServers[j].Trace)
+				})
+			case "Обновлено":
+				sort.Slice(tab.filteredServers, func(i, j int) bool {
+					return tab.filteredServers[i].Updated > tab.filteredServers[j].Updated
+				})
+			}
+		})
 	}
 
-	// Функция обновления списка серверов
 	updateServers := func() {
 		tab.refreshMutex.Lock()
 		defer tab.refreshMutex.Unlock()
@@ -251,12 +249,13 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		wg.Wait()
 	}
 
-	// Назначаем обработчики событий
 	refreshBtn.OnTapped = func() { go updateServers() }
 	tab.searchEntry.OnChanged = func(s string) {
 		filterServers(s)
 		sortServers(tab.sortSelect.Selected)
-		tab.serverTable.Refresh()
+		fyne.Do(func() {
+			tab.serverTable.Refresh()
+		})
 	}
 	tab.autoRefreshCheck.OnChanged = func(checked bool) {
 		if checked {
@@ -265,10 +264,11 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 	}
 	tab.sortSelect.OnChanged = func(string) {
 		sortServers(tab.sortSelect.Selected)
-		tab.serverTable.Refresh()
+		fyne.Do(func() {
+			tab.serverTable.Refresh()
+		})
 	}
 
-	// Автообновление
 	tab.wg.Add(1)
 	go func() {
 		defer tab.wg.Done()
@@ -287,7 +287,6 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		}
 	}()
 
-	// Первоначальное обновление
 	tab.wg.Add(1)
 	go func() {
 		defer tab.wg.Done()
@@ -299,12 +298,10 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		}
 	}()
 
-	// Обработчик закрытия окна
 	window.SetOnClosed(func() {
 		tab.Close()
 	})
 
-	// Компоновка интерфейса
 	return container.NewBorder(
 		container.NewVBox(
 			title,
@@ -325,9 +322,7 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 		nil,
 		nil,
 		container.NewBorder(
-
 			container.NewVBox(
-
 				widget.NewSeparator(),
 				headerRow,
 			),
@@ -340,8 +335,8 @@ func CreateServerStatusTab(window fyne.Window) fyne.CanvasObject {
 }
 
 func (tab *ServerStatusTab) Close() {
-	tab.cancel()  // Отменяем контекст
-	tab.wg.Wait() // Ждем завершения всех горутин
+	tab.cancel()
+	tab.wg.Wait()
 	tab.refreshMutex.Lock()
 	defer tab.refreshMutex.Unlock()
 }
@@ -468,46 +463,54 @@ func extractNumericValue(s string) int {
 }
 
 func updateStatusStyle(label *widget.Label, status string) {
-	switch status {
-	case "Online":
-		label.Importance = widget.SuccessImportance
-		label.TextStyle = fyne.TextStyle{Bold: true}
-	case "Offline":
-		label.Importance = widget.DangerImportance
-		label.TextStyle = fyne.TextStyle{Bold: true}
-	default:
-		label.Importance = widget.WarningImportance
-		label.TextStyle = fyne.TextStyle{Bold: false}
-	}
-	label.Refresh()
+	fyne.Do(func() {
+		switch status {
+		case "Online":
+			label.Importance = widget.SuccessImportance
+			label.TextStyle = fyne.TextStyle{Bold: true}
+		case "Offline":
+			label.Importance = widget.DangerImportance
+			label.TextStyle = fyne.TextStyle{Bold: true}
+		default:
+			label.Importance = widget.WarningImportance
+			label.TextStyle = fyne.TextStyle{Bold: false}
+		}
+		label.Refresh()
+	})
 }
 
 func updateHTTPStatusStyle(label *widget.Label, status string) {
-	if strings.HasPrefix(status, "HTTP 2") || strings.HasPrefix(status, "HTTP 3") {
-		label.Importance = widget.SuccessImportance
-	} else if strings.HasPrefix(status, "HTTP 4") || strings.HasPrefix(status, "HTTP 5") {
-		label.Importance = widget.DangerImportance
-	} else if status == "No HTTP" {
-		label.Importance = widget.WarningImportance
-	} else {
-		label.Importance = widget.MediumImportance
-	}
-	label.Refresh()
+	fyne.Do(func() {
+		if strings.HasPrefix(status, "HTTP 2") || strings.HasPrefix(status, "HTTP 3") {
+			label.Importance = widget.SuccessImportance
+		} else if strings.HasPrefix(status, "HTTP 4") || strings.HasPrefix(status, "HTTP 5") {
+			label.Importance = widget.DangerImportance
+		} else if status == "No HTTP" {
+			label.Importance = widget.WarningImportance
+		} else {
+			label.Importance = widget.MediumImportance
+		}
+		label.Refresh()
+	})
 }
 
 func updateTraceStyle(label *widget.Label, trace string) {
-	if strings.Contains(trace, "hops") {
-		label.Importance = widget.SuccessImportance
-	} else if trace == "Trace err" {
-		label.Importance = widget.DangerImportance
-	} else {
-		label.Importance = widget.MediumImportance
-	}
-	label.Refresh()
+	fyne.Do(func() {
+		if strings.Contains(trace, "hops") {
+			label.Importance = widget.SuccessImportance
+		} else if trace == "Trace err" {
+			label.Importance = widget.DangerImportance
+		} else {
+			label.Importance = widget.MediumImportance
+		}
+		label.Refresh()
+	})
 }
 
 func resetLabelStyle(label *widget.Label) {
-	label.Importance = widget.MediumImportance
-	label.TextStyle = fyne.TextStyle{}
-	label.Refresh()
+	fyne.Do(func() {
+		label.Importance = widget.MediumImportance
+		label.TextStyle = fyne.TextStyle{}
+		label.Refresh()
+	})
 }
