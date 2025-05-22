@@ -24,6 +24,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"golang.org/x/sys/windows"
 )
 
 // GitHubRelease представляет структуру ответа GitHub API о релизах
@@ -161,7 +162,7 @@ func CreateAppTabs(myApp fyne.App, window fyne.Window) fyne.CanvasObject {
 
 		widget.NewSeparator(),
 		container.NewCenter(
-			widget.NewLabel("v0.0.16 alpha"),
+			widget.NewLabel("v0.0.17 alpha"),
 		),
 	)
 
@@ -297,7 +298,7 @@ func updateApp(window fyne.Window) {
 		defer dialog.Hide()
 
 		// 1. Получаем текущую версию приложения
-		currentVersion := "0.0.16"
+		currentVersion := "0.0.17"
 
 		// 2. Получаем информацию о последнем релизе
 		statusLabel.SetText(settings.GetLocalizedString("FetchingReleaseInfo"))
@@ -445,7 +446,7 @@ func applyWindowsUpdate(exePath, updatePath string) error {
 		if systemRoot == "" {
 			systemRoot = "C:\\Windows"
 		}
-		// cmdPath := filepath.Join(systemRoot, "System32", "cmd.exe")
+		cmdPath := filepath.Join(systemRoot, "System32", "cmd.exe")
 
 		// 2. Создаем bat-файл с логикой обновления
 		batContent := fmt.Sprintf(`@echo off
@@ -487,9 +488,9 @@ exit /B 0
 		}
 
 		// 4. Запускаем через абсолютный путь к cmd.exe
-		// if err := runCommandHidden(cmdPath, "/C", batPath); err != nil {
-		// 	return fmt.Errorf("ошибка запуска обновления: %w", err)
-		// }
+		if err := runCommandHidden(cmdPath, "/C", batPath); err != nil {
+			return fmt.Errorf("ошибка запуска обновления: %w", err)
+		}
 
 		// 5. Немедленно завершаем текущее приложение
 		os.Exit(0)
@@ -497,26 +498,26 @@ exit /B 0
 	return nil
 }
 
-// // runCommandHidden запускает команду без отображения окна (только для Windows)
-// func runCommandHidden(path string, args ...string) error {
-// 	switch runtime.GOOS {
-// 	case "windows":
+// runCommandHidden запускает команду без отображения окна (только для Windows)
+func runCommandHidden(path string, args ...string) error {
+	switch runtime.GOOS {
+	case "windows":
 
-// 		cmd := exec.Command(path, args...)
-// 		cmd.SysProcAttr = &windows.SysProcAttr{
-// 			HideWindow: true,
-// 		}
-// 		return cmd.Start()
-// 	case "linux":
-// 		// Просто запускаем команду без скрытия окна
-// 		return exec.Command(path, args...).Start()
-// 	default:
+		cmd := exec.Command(path, args...)
+		cmd.SysProcAttr = &windows.SysProcAttr{
+			HideWindow: true,
+		}
+		return cmd.Start()
+	case "linux":
+		// Просто запускаем команду без скрытия окна
+		return exec.Command(path, args...).Start()
+	default:
 
-// 		// Просто запускаем команду без скрытия окна
-// 		return exec.Command(path, args...).Start()
-// 	}
-// 	return nil
-// }
+		// Просто запускаем команду без скрытия окна
+		return exec.Command(path, args...).Start()
+	}
+	return nil
+}
 
 func applyUnixUpdate(exePath, updatePath string) error {
 	// Устанавливаем права на новый файл

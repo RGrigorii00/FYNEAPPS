@@ -21,7 +21,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"golang.org/x/sys/windows/registry"
 )
 
 type SystemSoftware struct {
@@ -247,8 +246,8 @@ func CreateSoftwareTab(window fyne.Window) fyne.CanvasObject {
 
 func getInstalledSoftware() ([]SystemSoftware, error) {
 	switch runtime.GOOS {
-	case "windows":
-		return getWindowsSoftwareCombined()
+	// case "windows":
+	// 	return getWindowsSoftwareCombined()
 	case "linux":
 		return getLinuxSoftware()
 	default:
@@ -256,77 +255,77 @@ func getInstalledSoftware() ([]SystemSoftware, error) {
 	}
 }
 
-func getWindowsSoftwareCombined() ([]SystemSoftware, error) {
-	var result []SystemSoftware
+// func getWindowsSoftwareCombined() ([]SystemSoftware, error) {
+// 	var result []SystemSoftware
 
-	// Получаем программы из реестра
-	regSoftware, err := getWindowsSoftwareFromRegistry()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get software from registry: %v", err)
-	}
-	result = append(result, regSoftware...)
+// 	// Получаем программы из реестра
+// 	regSoftware, err := getWindowsSoftwareFromRegistry()
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get software from registry: %v", err)
+// 	}
+// 	result = append(result, regSoftware...)
 
-	// Красивый вывод с отступами
-	saveToJSONWithSwappedFields(regSoftware)
-	saveToPostgreSQL(regSoftware)
+// 	// Красивый вывод с отступами
+// 	saveToJSONWithSwappedFields(regSoftware)
+// 	saveToPostgreSQL(regSoftware)
 
-	// // Получаем программы из WMIC (MSI-установленные)
-	// wmicSoftware, err := getWindowsSoftwareExtended()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get software from WMI: %v", err)
-	// }
-	// result = append(result, wmicSoftware...)
+// 	// // Получаем программы из WMIC (MSI-установленные)
+// 	// wmicSoftware, err := getWindowsSoftwareExtended()
+// 	// if err != nil {
+// 	// 	return nil, fmt.Errorf("failed to get software from WMI: %v", err)
+// 	// }
+// 	// result = append(result, wmicSoftware...)
 
-	// Удаляем дубликаты
-	return removeSoftwareDuplicates(result), nil
-}
+// 	// Удаляем дубликаты
+// 	return removeSoftwareDuplicates(result), nil
+// }
 
-func getWindowsSoftwareFromRegistry() ([]SystemSoftware, error) {
-	keys := []string{
-		`SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`,
-		`SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`,
-	}
+// func getWindowsSoftwareFromRegistry() ([]SystemSoftware, error) {
+// 	keys := []string{
+// 		`SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`,
+// 		`SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall`,
+// 	}
 
-	var softwareList []SystemSoftware
+// 	var softwareList []SystemSoftware
 
-	for _, key := range keys {
-		k, err := registry.OpenKey(registry.LOCAL_MACHINE, key, registry.ENUMERATE_SUB_KEYS)
-		if err != nil {
-			continue
-		}
-		defer k.Close()
+// 	for _, key := range keys {
+// 		k, err := registry.OpenKey(registry.LOCAL_MACHINE, key, registry.ENUMERATE_SUB_KEYS)
+// 		if err != nil {
+// 			continue
+// 		}
+// 		defer k.Close()
 
-		subkeys, err := k.ReadSubKeyNames(-1)
-		if err != nil {
-			continue
-		}
+// 		subkeys, err := k.ReadSubKeyNames(-1)
+// 		if err != nil {
+// 			continue
+// 		}
 
-		for _, subkey := range subkeys {
-			sk, err := registry.OpenKey(registry.LOCAL_MACHINE, key+`\`+subkey, registry.QUERY_VALUE)
-			if err != nil {
-				continue
-			}
+// 		for _, subkey := range subkeys {
+// 			sk, err := registry.OpenKey(registry.LOCAL_MACHINE, key+`\`+subkey, registry.QUERY_VALUE)
+// 			if err != nil {
+// 				continue
+// 			}
 
-			name, _, _ := sk.GetStringValue("DisplayName")
-			version, _, _ := sk.GetStringValue("Publisher")
-			publisher, _, _ := sk.GetStringValue("DisplayVersion")
-			installDate, _, _ := sk.GetStringValue("InstallDate")
+// 			name, _, _ := sk.GetStringValue("DisplayName")
+// 			version, _, _ := sk.GetStringValue("Publisher")
+// 			publisher, _, _ := sk.GetStringValue("DisplayVersion")
+// 			installDate, _, _ := sk.GetStringValue("InstallDate")
 
-			if name != "" {
-				softwareList = append(softwareList, SystemSoftware{
-					Name:      name,
-					Publisher: publisher,
-					Version:   version,
-					Installed: parseWindowsInstallDate(installDate),
-				})
-			}
+// 			if name != "" {
+// 				softwareList = append(softwareList, SystemSoftware{
+// 					Name:      name,
+// 					Publisher: publisher,
+// 					Version:   version,
+// 					Installed: parseWindowsInstallDate(installDate),
+// 				})
+// 			}
 
-			sk.Close()
-		}
-	}
+// 			sk.Close()
+// 		}
+// 	}
 
-	return softwareList, nil
-}
+// 	return softwareList, nil
+// }
 
 func getWindowsSoftwareExtended() ([]SystemSoftware, error) {
 	// Вариант 1: Используем стандартный Win32_Product (только MSI-установленные)
